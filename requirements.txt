@@ -1,5 +1,7 @@
+Plaintex
+
 streamlit
 pandas
 psycopg2-binary
 fpdf
-PIL
+pillow
