@@ -7,9 +7,12 @@ from PIL import Image
 from fpdf import FPDF
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
+# Verifica se o escudo do time existe para usá-lo como ícone oficial (favicon)
+icone_pagina = "meu_time.png" if os.path.exists("meu_time.png") else "⚽"
+
 st.set_page_config(
-    page_title="Gestão Time de Várzea - União Itapura",
-    page_icon="⚽",
+    page_title="União Itapura F.C. - Gestão Oficial",
+    page_icon=icone_pagina,
     layout="wide",
     initial_sidebar_state="expanded"
 )
