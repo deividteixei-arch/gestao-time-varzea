@@ -129,7 +129,7 @@ def tela_login():
         with col_img2:
             st.image("meu_time.png", width=120)
     
-    st.markdown("<h2 style='text-align: center;'>GESTÃO TIME DE VÁZEA</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>GESTÃO TIME DE VÁRZEA</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray;'>Desenvolvido por DTBRAS Soluções Tecnológicas - CNPJ: 32.608.676/0001-59</p>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -163,7 +163,7 @@ else:
     if os.path.exists("meu_time.png"):
         st.sidebar.image("meu_time.png", width=100)
     
-    st.sidebar.title("GESTÃO TIME DE VÁZEA")
+    st.sidebar.title("GESTÃO TIME DE VÁRZEA")
     st.sidebar.markdown("**União Itapura F.C.**")
     st.sidebar.write(f"Logado: **{st.session_state.usuario}** ({st.session_state.perfil})")
     st.sidebar.divider()
