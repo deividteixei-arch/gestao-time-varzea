@@ -188,8 +188,8 @@ else:
     if menu == "⚙️ Painel Admin":
         st.title("⚙️ Painel do Administrador - Gestão do Clube")
         
-        tab_adm1, tab_adm2, tab_adm3, tab_adm4, tab_adm5 = st.tabs([
-            "🛡️ Dados do Clube", "👥 Acessos", "🤝 Patrocinadores", "🎁 Doadores", "🏟️ Campos Conveniados"
+        tab_adm1, tab_adm2, tab_adm3, tab_adm4, tab_adm5, tab_adm6 = st.tabs([
+            "🛡️ Dados do Clube", "👥 Acessos", "🤝 Patrocinadores", "🎁 Doadores", "🏟️ Campos Conveniados", "💾 Backup & Dados"
         ])
         
         with tab_adm1:
@@ -531,6 +531,50 @@ else:
                 query_c += f" WHERE nome_local ILIKE '%{termo_c}%'"
             st.dataframe(pd.read_sql(query_c, conn), use_container_width=True, hide_index=True)
 
+        with tab_adm6:
+            st.subheader("💾 Central de Backup e Segurança de Dados")
+            st.write("Baixe uma cópia de segurança em formato CSV de todas as tabelas do sistema para o seu computador a qualquer momento.")
+            
+            col_b1, col_b2 = st.columns(2)
+            
+            with col_b1:
+                df_b_atletas = pd.read_sql("SELECT * FROM atletas", conn)
+                st.download_button(
+                    label="📥 Baixar Backup de Membros (CSV)",
+                    data=df_b_atletas.to_csv(index=False).encode('utf-8'),
+                    file_name="backup_membros_uniao_itapura.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+                
+                df_b_fin = pd.read_sql("SELECT * FROM financeiro", conn)
+                st.download_button(
+                    label="📥 Baixar Backup Financeiro (CSV)",
+                    data=df_b_fin.to_csv(index=False).encode('utf-8'),
+                    file_name="backup_financeiro_uniao_itapura.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+            with col_b2:
+                df_b_jogos = pd.read_sql("SELECT * FROM jogos", conn)
+                st.download_button(
+                    label="📥 Baixar Backup de Jogos (CSV)",
+                    data=df_b_jogos.to_csv(index=False).encode('utf-8'),
+                    file_name="backup_jogos_uniao_itapura.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+                
+                df_b_scouts = pd.read_sql("SELECT * FROM scouts", conn)
+                st.download_button(
+                    label="📥 Baixar Backup de Scouts (CSV)",
+                    data=df_b_scouts.to_csv(index=False).encode('utf-8'),
+                    file_name="backup_scouts_uniao_itapura.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
     # ==========================================
     # 📊 DASHBOARD
     # ==========================================
@@ -555,24 +599,24 @@ else:
 
         st.markdown(
             f"""
-            <div style="display: flex; gap: 15px; margin-bottom: 25px;">
-                <div style="flex: 1; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid #3399ff;">
+            <div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 140px; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid #3399ff;">
                     <p style="color: gray; margin: 0; font-size: 13px;">Membros Ativos</p>
                     <h2 style="color: white; margin: 5px 0 0 0;">{ativos}</h2>
                 </div>
-                <div style="flex: 1; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid #00b33c;">
+                <div style="flex: 1; min-width: 140px; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid #00b33c;">
                     <p style="color: gray; margin: 0; font-size: 13px;">Vitórias</p>
                     <h2 style="color: #00b33c; margin: 5px 0 0 0;">{vit}</h2>
                 </div>
-                <div style="flex: 1; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid #ffcc00;">
+                <div style="flex: 1; min-width: 140px; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid #ffcc00;">
                     <p style="color: gray; margin: 0; font-size: 13px;">Empates</p>
                     <h2 style="color: #ffcc00; margin: 5px 0 0 0;">{emp}</h2>
                 </div>
-                <div style="flex: 1; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid #ff4d4d;">
+                <div style="flex: 1; min-width: 140px; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid #ff4d4d;">
                     <p style="color: gray; margin: 0; font-size: 13px;">Derrotas</p>
                     <h2 style="color: #ff4d4d; margin: 5px 0 0 0;">{der}</h2>
                 </div>
-                <div style="flex: 1; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid {cor_saldo};">
+                <div style="flex: 1; min-width: 140px; background-color: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 4px solid {cor_saldo};">
                     <p style="color: gray; margin: 0; font-size: 13px;">Saldo em Caixa</p>
                     <h2 style="color: {cor_saldo}; margin: 5px 0 0 0;">R$ {saldo:.2f}</h2>
                 </div>
@@ -744,7 +788,7 @@ else:
     # 💰 FINANCEIRO
     # ==========================================
     elif menu == "💰 Financeiro":
-        st.title("💰 anceiro & Calendário de Mensalidades")
+        st.title("💰 Controle Financeiro & Calendário de Mensalidades")
         tab1, tab2 = st.tabs(["💵 Lançamentos Gerais", "📅 Calendário de Mensalidades & Relatório"])
         
         with tab1:
@@ -904,8 +948,15 @@ else:
                         pdf.set_font("Helvetica", "", 9)
                         pdf.cell(0, 6, f"- {item['Atleta']} | Status: {status_texto} | Pago: {item['Valor Pago (R$)']} | Pendente: {item['Falta Pagar (R$)']}", 0, 1)
                     
-                    pdf.output("Calendario_Mensalidades.pdf")
+                    pdf_bytes = pdf.output(dest='S').encode('latin1')
                     st.success("PDF do Calendário de Mensalidades gerado com sucesso!")
+                    st.download_button(
+                        label="⬇️ Baixar Arquivo PDF Calendário de Mensalidades",
+                        data=pdf_bytes,
+                        file_name="Calendario_Mensalidades.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
     # ==========================================
     # ⚽ JOGOS & SÚMULA
@@ -1341,3 +1392,5 @@ else:
                     mime="application/pdf",
                     use_container_width=True
                 )
+
+    conn.close()
