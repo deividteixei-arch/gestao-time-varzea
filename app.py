@@ -582,7 +582,7 @@ else:
     # 📊 DASHBOARD
     # ==========================================
     elif menu == "📊 Dashboard":
-        st.title("📊 GESTÃO TIME DE VÁZEA - Painel Executivo")
+        st.title("📊 GESTÃO TIME DE VÁRZEA - Painel Executivo")
         
         ativos = pd.read_sql("SELECT COUNT(*) FROM atletas WHERE status='Ativo'", conn).iloc[0,0]
         vit = pd.read_sql("SELECT COUNT(*) FROM jogos WHERE resultado='Vitória'", conn).iloc[0,0]
