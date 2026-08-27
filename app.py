@@ -107,7 +107,7 @@ class PDFRelatorio(FPDF):
             try: self.image("meu_time.png", 10, 8, 15)
             except: pass
         self.set_font("Helvetica", "B", 11)
-        self.cell(0, 8, f"GESTÃO TIME DE VÁZEA - {self.titulo_relatorio}", 0, 1, "C")
+        self.cell(0, 8, f"GESTÃO TIME DE VÁRZEA - {self.titulo_relatorio}", 0, 1, "C")
         self.set_font("Helvetica", "I", 8)
         self.cell(0, 4, "DTBRAS SOLUÇÕES TECNOLÓGICAS - CNPJ: 32.608.676/0001-59", 0, 1, "C")
         self.ln(4)
