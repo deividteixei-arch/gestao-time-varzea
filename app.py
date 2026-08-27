@@ -698,7 +698,7 @@ else:
                 tel = st.text_input("Telefone / WhatsApp", value=membro_atual["telefone"])
             with col2:
                 endereco = st.text_input("Endereço", value=membro_atual["endereco"])
-                cargos_lista = ["Jogador", "Diretor", "Técnico", "Assistente", "Marketing", "Outros"]
+                cargos_lista = ["Jogador", "Diretor", "Técnico", "Colaborador", "Assistente", "Marketing", "Ajudante", "Outros"]
                 idx_cargo = cargos_lista.index(membro_atual["cargo"]) if membro_atual["cargo"] in cargos_lista else 0
                 cargo = st.selectbox("Cargo", cargos_lista, index=idx_cargo)
                 
@@ -744,7 +744,7 @@ else:
     # 💰 FINANCEIRO
     # ==========================================
     elif menu == "💰 Financeiro":
-        st.title("💰 Controle Financeiro & Calendário de Mensalidades")
+        st.title("💰 anceiro & Calendário de Mensalidades")
         tab1, tab2 = st.tabs(["💵 Lançamentos Gerais", "📅 Calendário de Mensalidades & Relatório"])
         
         with tab1:
@@ -792,7 +792,7 @@ else:
                 f_data = c1.text_input("Data do Lançamento", value=fin_atual["data"])
                 f_valor = c2.number_input("Valor (R$)", value=float(fin_atual["valor"]), format="%.2f")
                 
-                categorias_f = ["Mensalidade", "Avulso", "Patrocínio", "Diretoria", "Verba", "Doação", "Manutenção", "Água", "Juiz/Troféu", "Outros"]
+                categorias_f = ["Mensalidade", "Jogos", "Avulso", "Patrocínio", "Diretoria", "Verba", "Doação", "Manutenção", "Água", "Juiz/Troféu", "Outros"]
                 idx_tipo = categorias_f.index(fin_atual["tipo"]) if fin_atual["tipo"] in categorias_f else 0
                 f_tipo = c3.selectbox("Categoria", categorias_f, index=idx_tipo)
                 
@@ -1126,6 +1126,7 @@ else:
         col_r1, col_r2 = st.columns(2)
         
         with col_r1:
+            # 1. RELATÓRIO FINANCEIRO
             if st.button("📥 Gerar PDF: Relatório Financeiro (Tabela)", use_container_width=True):
                 pdf = PDFRelatorio("RELATÓRIO FINANCEIRO & MENSALISTAS")
                 pdf.add_page()
@@ -1178,9 +1179,18 @@ else:
                 pdf.cell(24, 7, f"R$ {soma_total:.2f}", 1, 0, "R", True)
                 pdf.cell(88, 7, "", 1, 1, "C", True)
                 
-                pdf.output("Relatorio_Financeiro.pdf")
-                st.success("PDF Financeiro em Tabela gerado com sucesso!")
+                # Gera o PDF em bytes para download direto
+                pdf_bytes = pdf.output(dest='S').encode('latin1')
+                st.success("PDF Financeiro gerado com sucesso!")
+                st.download_button(
+                    label="⬇️ Baixar Arquivo PDF Financeiro",
+                    data=pdf_bytes,
+                    file_name="Relatorio_Financeiro.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
 
+            # 2. RELAÇÃO DE MEMBROS
             if st.button("📥 Gerar PDF: Relação de Membros Completa", use_container_width=True):
                 pdf = PDFRelatorio("RELAÇÃO DE MEMBROS E COLABORADORES")
                 pdf.add_page()
@@ -1198,10 +1208,18 @@ else:
                     pdf.ln(3)
                 c.close()
                 
-                pdf.output("Relatorio_Membros.pdf")
-                st.success("PDF de Membros completo gerado com sucesso!")
+                pdf_bytes = pdf.output(dest='S').encode('latin1')
+                st.success("PDF de Membros gerado com sucesso!")
+                st.download_button(
+                    label="⬇️ Baixar Arquivo PDF de Membros",
+                    data=pdf_bytes,
+                    file_name="Relatorio_Membros.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
 
         with col_r2:
+            # 3. RESUMO DE JOGOS
             if st.button("📥 Gerar PDF: Resumo de Jogos Completo", use_container_width=True):
                 pdf = PDFRelatorio("RELATORIO DE JOGOS E PRESENCA")
                 pdf.add_page()
@@ -1267,9 +1285,17 @@ else:
                     pdf.ln(4)
                 c.close()
                 
-                pdf.output("Relatorio_Jogos.pdf")
-                st.success("PDF de Jogos Completo gerado com sucesso!")
+                pdf_bytes = pdf.output(dest='S').encode('latin1')
+                st.success("PDF de Jogos gerado com sucesso!")
+                st.download_button(
+                    label="⬇️ Baixar Arquivo PDF de Jogos",
+                    data=pdf_bytes,
+                    file_name="Relatorio_Jogos.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
 
+            # 4. RESUMO GERAL CONSOLIDADO
             if st.button("📥 Gerar PDF: Resumo Geral Consolidado Completo", use_container_width=True):
                 pdf = PDFRelatorio("RESUMO GERAL DO CLUBE - CONSOLIDADO")
                 pdf.add_page()
@@ -1306,7 +1332,12 @@ else:
                     pdf.cell(0, 5, f"- Data: {jg[0]} | Uniao {jg[2]} x {jg[3]} {jg[1]} ({jg[4]})", 0, 1)
                 c.close()
                 
-                pdf.output("Resumo_Geral_Clube.pdf")
-                st.success("PDF Resumo Geral Completo gerado com sucesso!")
-
-    conn.close()
+                pdf_bytes = pdf.output(dest='S').encode('latin1')
+                st.success("PDF Resumo Geral gerado com sucesso!")
+                st.download_button(
+                    label="⬇️ Baixar Arquivo PDF Resumo Geral",
+                    data=pdf_bytes,
+                    file_name="Resumo_Geral_Clube.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
