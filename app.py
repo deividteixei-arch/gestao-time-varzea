@@ -702,7 +702,7 @@ else:
                 idx_cargo = cargos_lista.index(membro_atual["cargo"]) if membro_atual["cargo"] in cargos_lista else 0
                 cargo = st.selectbox("Cargo", cargos_lista, index=idx_cargo)
                 
-                pos_lista = ["Goleiro", "Zagueiro", "Lateral", "Volante", "Meia", "Atacante"]
+                pos_lista = ["Goleiro", "Zagueiro", "Lateral", "Volante", "Meia", "Atacante", "N/A"]
                 idx_pos = pos_lista.index(membro_atual["posicao"]) if membro_atual["posicao"] in pos_lista else 0
                 posicao = st.selectbox("Posição em Campo", pos_lista, index=idx_pos)
                 
