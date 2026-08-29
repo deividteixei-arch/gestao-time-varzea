@@ -108,7 +108,6 @@ class PDFRelatorio(FPDF):
             self.image("meu_time.png", 10, 8, 12)
 
         self.set_font("Helvetica", "B", 11)
-        # AQUI ESTAVA O ERRO: GESTÃO TIME DE VÁRZEA (Certifique-se do R aqui!)
         self.cell(0, 6, "GESTÃO TIME DE VÁRZEA - UNIÃO ITAPURA F.C.", 0, 1, "C")
         self.set_font("Helvetica", "B", 8)
         self.cell(0, 5, "DTBRAS SOLUÇÕES TECNOLÓGICAS - CNPJ: 32.608.676/0001-59", 0, 1, "C")
