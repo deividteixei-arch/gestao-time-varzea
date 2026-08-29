@@ -182,31 +182,29 @@ if not st.session_state.logado:
     st.markdown("Desenvolvido por DTBRAS Soluções Tecnológicas - CNPJ: 32.608.676/0001-59")
     st.markdown("---")
     
-    col_l1, col_l2, col_l3 = st.columns([2, 1, 1])
-    with col_l1:
-        with st.form("form_login"):
-            usuario_input = st.text_input("Usuário")
-            senha_input = st.text_input("Senha", type="password")
-            submit_login = st.form_submit_button("Entrar no Sistema", use_container_width=True)
+    with st.form("form_login"):
+        usuario_input = st.text_input("Usuário")
+        senha_input = st.text_input("Senha", type="password")
+        submit_login = st.form_submit_button("Entrar no Sistema", use_container_width=True)
+        
+        if submit_login:
+            conn_l = conectar_banco()
+            c_l = conn_l.cursor()
+            c_l.execute("SELECT senha, perfil FROM usuarios WHERE usuario = %s", (usuario_input,))
+            res = c_l.fetchone()
+            c_l.close()
+            conn_l.close()
             
-            if submit_login:
-                conn_l = conectar_banco()
-                c_l = conn_l.cursor()
-                c_l.execute("SELECT senha, perfil FROM usuarios WHERE usuario = %s", (usuario_input,))
-                res = c_l.fetchone()
-                c_l.close()
-                conn_l.close()
+            if res and res[0] == senha_input:
+                st.session_state.logado = True
+                st.session_state.usuario = usuario_input
+                st.session_state.perfil = res[1]
+                st.session_state.ultima_atividade = datetime.now()
+                st.success("Login realizado com sucesso!")
+                st.rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
                 
-                if res and res[0] == senha_input:
-                    st.session_state.logado = True
-                    st.session_state.usuario = usuario_input
-                    st.session_state.perfil = res[1]
-                    st.session_state.ultima_atividade = datetime.now()
-                    st.success("Login realizado com sucesso!")
-                    st.rerun()
-                else:
-                    st.error("Usuário ou senha incorretos.")
-                    
     st.stop()  # Para a execução aqui se não estiver logado
 
 # --- CONEXÃO GLOBAL PÓS-LOGIN ---
