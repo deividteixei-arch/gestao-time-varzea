@@ -175,18 +175,20 @@ if not st.session_state.logado:
 
 # --- TELA DE LOGIN ---
 if not st.session_state.logado:
-    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
-    with col_l2:
-        if os.path.exists("meu_time.png"):
-            st.image("meu_time.png", width=120)
-        st.title("⚽ UNIÃO ITAPURA F.C.")
-        st.markdown("### Acesso Restrito ao Sistema")
-        
+    if os.path.exists("meu_time.png"):
+        st.image("meu_time.png", width=120)
+    
+    st.title("GESTÃO TIME DE VÁRZEA")
+    st.markdown("Desenvolvido por DTBRAS Soluções Tecnológicas - CNPJ: 32.608.676/0001-59")
+    st.markdown("---")
+    
+    col_l1, col_l2, col_l3 = st.columns([2, 1, 1])
+    with col_l1:
         with st.form("form_login"):
             usuario_input = st.text_input("Usuário")
             senha_input = st.text_input("Senha", type="password")
             submit_login = st.form_submit_button("Entrar no Sistema", use_container_width=True)
-                
+            
             if submit_login:
                 conn_l = conectar_banco()
                 c_l = conn_l.cursor()
