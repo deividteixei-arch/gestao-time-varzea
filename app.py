@@ -140,81 +140,39 @@ if st.session_state.logado:
         # Atualiza o cronômetro a cada ação do usuário
         st.session_state.ultima_atividade = datetime.now()
 
-
-with tab_adm2:
-            st.subheader("Gerenciar Usuários, Acessos e Redefinição de Senhas")
-            if 'edit_user_id' not in st.session_state:
-                st.session_state.edit_user_id = None
-
-            df_users_all = pd.read_sql("SELECT id, usuario, perfil FROM usuarios ORDER BY usuario ASC", conn)
-            with st.expander("🔍 Pesquisar / Selecionar Usuários", expanded=True):
-                termo_u = st.text_input("Pesquisar usuário por nome:")
-                if not df_users_all.empty:
-                    lista_opcoes_users = {f"ID {row['id']} - {row['usuario']} ({row['perfil']})": row['id'] for _, row in df_users_all.iterrows()}
-                    user_selecionado_str = st.selectbox("Selecione o usuário:", ["-- Novo Usuário --"] + list(lista_opcoes_users.keys()))
-                    
-                    col_u1, col_u2, col_u3 = st.columns(3)
-                    if col_u1.button("✏️ Carregar Usuário p/ Editar", key="btn_ed_user"):
-                        if user_selecionado_str != "-- Novo Usuário --":
-                            st.session_state.edit_user_id = lista_opcoes_users[user_selecionado_str]
-                            st.rerun()
-                    if col_u2.button("🧹 Limpar Seleção", key="btn_cl_user"):
-                        st.session_state.edit_user_id = None
-                        st.rerun()
-                    if col_u3.button("🗑️ Excluir Usuário", key="btn_del_user"):
-                        if user_selecionado_str != "-- Novo Usuário --":
-                            id_u_exc = lista_opcoes_users[user_selecionado_str]
-                            if id_u_exc == 1:
-                                st.error("Não é permitido excluir o usuário Administrador principal!")
-                            else:
-                                c = conn.cursor()
-                                c.execute("DELETE FROM usuarios WHERE id = %s", (id_u_exc,))
-                                conn.commit()
-                                c.close()
-                                st.session_state.edit_user_id = None
-                                st.success("Usuário excluído com sucesso!")
-                                st.rerun()
-
-            st.divider()
-            
-            # --- SEÇÃO DE REDEFINIÇÃO RÁPIDA DE SENHA PELO ADMIN ---
-            st.markdown("#### 🔑 Redefinição Rápida de Senha")
-            c_pass = conectar_banco()
-            cp = c_pass.cursor()
-            cp.execute("SELECT id, usuario FROM usuarios")
-            users_para_senha = cp.fetchall()
-            cp.close()
-            c_pass.close()
-            
-            if users_para_senha:
-                nicks_usuarios = [u[1] for u in users_para_senha]
-                usuario_alvo = st.selectbox("Selecione o usuário para alterar a senha:", nicks_usuarios, key="select_alt_senha_admin")
-                nova_senha_admin = st.text_input("Nova Senha para este usuário", type="password", key="input_nova_senha_admin")
+# --- CONTROLE DE EXIBIÇÃO APÓS O LOGIN / TELA DE LOGIN ---
+if not st.session_state.logado:
+    st.title("⚽ GESTÃO UNIÃO ITAPURA F.C.")
+    aba_entrar, aba_recuperar = st.tabs(["🔑 Entrar no Sistema", "🔄 Recuperar Senha"])
+    
+    with aba_entrar:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### Acesso Restrito")
+            with st.form("form_login"):
+                usuario_input = st.text_input("Usuário")
+                senha_input = st.text_input("Senha", type="password")
+                submit_login = st.form_submit_button("Entrar", use_container_width=True)
                 
-                if st.button("💾 Salvar Nova Senha"):
-                    if nova_senha_admin:
-                        c_up = conectar_banco()
-                        cup = c_up.cursor()
-                        cup.execute("UPDATE usuarios SET senha = %s WHERE usuario = %s", (nova_senha_admin, usuario_alvo))
-                        c_up.commit()
-                        cup.close()
-                        c_up.close()
-                        st.success(f"Senha do usuário '{usuario_alvo}' redefinida com sucesso!")
+                if submit_login:
+                    conn_l = conectar_banco()
+                    c_l = conn_l.cursor()
+                    c_l.execute("SELECT senha, perfil FROM usuarios WHERE usuario = %s", (usuario_input,))
+                    res = c_l.fetchone()
+                    c_l.close()
+                    conn_l.close()
+                    
+                    if res and res[0] == senha_input:
+                        st.session_state.logado = True
+                        st.session_state.usuario = usuario_input
+                        st.session_state.perfil = res[1]
+                        st.session_state.ultima_atividade = datetime.now()
+                        st.success("Login realizado com sucesso!")
+                        st.rerun()
                     else:
-                        st.warning("Digite a nova senha antes de salvar.")
+                        st.error("Usuário ou senha incorretos.")
 
-            st.divider()
-            
-            user_atual = {"usuario": "", "senha": "", "perfil": "Diretor"}
-            if st.session_state.edit_user_id:
-                c = conn.cursor()
-                c.execute("SELECT usuario, senha, perfil FROM usuarios WHERE id = %s", (st.session_state.edit_user_id,))
-                res_u = c.fetchone()
-                c.close()
-                if res_u:
-                    user_atual = {"usuario": res_u[0], "senha": res_u[1], "perfil": res_u[2]}
-
-with aba_recuperar:
+    with aba_recuperar:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.markdown("### Recuperação de Senha")
@@ -226,29 +184,88 @@ with aba_recuperar:
                 
                 if submit_rec:
                     if user_rec and nova_senha_rec:
-                        conn = conectar_banco()
-                        c = conn.cursor()
-                        c.execute("SELECT id FROM usuarios WHERE usuario = %s", (user_rec,))
-                        existe = c.fetchone()
+                        conn_r = conectar_banco()
+                        c_r = conn_r.cursor()
+                        c_r.execute("SELECT id FROM usuarios WHERE usuario = %s", (user_rec,))
+                        existe = c_r.fetchone()
                         if existe:
-                            c.execute("UPDATE usuarios SET senha = %s WHERE usuario = %s", (nova_senha_rec, user_rec))
-                            conn.commit()
+                            c_r.execute("UPDATE usuarios SET senha = %s WHERE usuario = %s", (nova_senha_rec, user_rec))
+                            conn_r.commit()
                             st.success("Senha redefinida com sucesso! Volte na aba 'Entrar no Sistema'.")
                         else:
                             st.error("Usuário não encontrado no sistema.")
-                        c.close()
-                        conn.close()
+                        c_r.close()
+                        conn_r.close()
                     else:
                         st.warning("Preencha todos os campos.")
+                        
+    st.stop()  # Para a execução aqui se não estiver logado, evitando ler o resto do app
 
-    # ... aqui termina o bloco "else: st.warning("Preencha todos os campos.")" da função tela_login()
-
-# --- CONTROLE DE EXIBIÇÃO APÓS O LOGIN ---
+# --- CONTROLE DE EXIBIÇÃO APÓS O LOGIN / TELA DE LOGIN ---
 if not st.session_state.logado:
-    tela_login()
-    st.stop()
+    st.title("⚽ GESTÃO UNIÃO ITAPURA F.C.")
+    aba_entrar, aba_recuperar = st.tabs(["🔑 Entrar no Sistema", "🔄 Recuperar Senha"])
+    
+    with aba_entrar:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### Acesso Restrito")
+            with st.form("form_login"):
+                usuario_input = st.text_input("Usuário")
+                senha_input = st.text_input("Senha", type="password")
+                submit_login = st.form_submit_button("Entrar", use_container_width=True)
+                
+                if submit_login:
+                    conn_l = conectar_banco()
+                    c_l = conn_l.cursor()
+                    c_l.execute("SELECT senha, perfil FROM usuarios WHERE usuario = %s", (usuario_input,))
+                    res = c_l.fetchone()
+                    c_l.close()
+                    conn_l.close()
+                    
+                    if res and res[0] == senha_input:
+                        st.session_state.logado = True
+                        st.session_state.usuario = usuario_input
+                        st.session_state.perfil = res[1]
+                        st.session_state.ultima_atividade = datetime.now()
+                        st.success("Login realizado com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("Usuário ou senha incorretos.")
 
-# --- MENU LATERAL DO SISTEMA ---
+    with aba_recuperar:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### Recuperação de Senha")
+            st.write("Insira seu nome de usuário para cadastrar uma nova senha de acesso.")
+            with st.form("form_recuperar"):
+                user_rec = st.text_input("Nome de Usuário")
+                nova_senha_rec = st.text_input("Nova Senha Desejada", type="password")
+                submit_rec = st.form_submit_button("Redefinir Senha", use_container_width=True)
+                
+                if submit_rec:
+                    if user_rec and nova_senha_rec:
+                        conn_r = conectar_banco()
+                        c_r = conn_r.cursor()
+                        c_r.execute("SELECT id FROM usuarios WHERE usuario = %s", (user_rec,))
+                        existe = c_r.fetchone()
+                        if existe:
+                            c_r.execute("UPDATE usuarios SET senha = %s WHERE usuario = %s", (nova_senha_rec, user_rec))
+                            conn_r.commit()
+                            st.success("Senha redefinida com sucesso! Volte na aba 'Entrar no Sistema'.")
+                        else:
+                            st.error("Usuário não encontrado no sistema.")
+                        c_r.close()
+                        conn_r.close()
+                    else:
+                        st.warning("Preencha todos os campos.")
+                        
+    st.stop()  # Para a execução aqui se não estiver logado
+
+# --- CONEXÃO GLOBAL PÓS-LOGIN ---
+conn = conectar_banco()
+
+# --- MENU LATERAL DO SISTEMA (Só carrega se estiver logado) ---
 st.sidebar.image("meu_time.png" if os.path.exists("meu_time.png") else "⚽", width=100)
 st.sidebar.markdown(f"### Olá, {st.session_state.usuario}!")
 st.sidebar.markdown(f"**Perfil:** {st.session_state.perfil}")
@@ -267,8 +284,6 @@ menu = st.sidebar.radio(
 )
 
 st.sidebar.divider()
-
-# Logo abaixo já começam os seus ifs das abas (if menu == "⚙️ Painel Admin": ...)
 
     # ==========================================
     # ⚙️ PAINEL ADMIN
