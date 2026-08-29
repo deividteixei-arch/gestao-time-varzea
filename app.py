@@ -214,7 +214,7 @@ with tab_adm2:
                 if res_u:
                     user_atual = {"usuario": res_u[0], "senha": res_u[1], "perfil": res_u[2]}
 
-    with aba_recuperar:
+with aba_recuperar:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.markdown("### Recuperação de Senha")
