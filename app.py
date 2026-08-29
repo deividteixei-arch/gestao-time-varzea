@@ -181,24 +181,30 @@ if not st.session_state.logado:
 conn = conectar_banco()
 
 # --- MENU LATERAL DO SISTEMA (Só carrega se estiver logado) ---
-st.sidebar.image("meu_time.png" if os.path.exists("meu_time.png") else "⚽", width=100)
-st.sidebar.markdown(f"### Olá, {st.session_state.usuario}!")
-st.sidebar.markdown(f"**Perfil:** {st.session_state.perfil}")
+with st.sidebar:
+    # Centraliza o logo mantendo o tamanho original (width=100)
+    c_sb1, c_sb2, c_sb3 = st.columns([1, 2, 1])
+    with c_sb2:
+        if os.path.exists("meu_time.png"):
+            st.image("meu_time.png", width=100)
+    
+    st.markdown("<h4 style='text-align: center; margin-bottom: 0px;'>GESTÃO TIME DE VÁRZEA</h4>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 10px; color: gray;'>DTBRAS Soluções Tecnológicas<br>CNPJ: 32.608.676/0001-59</p>", unsafe_allow_html=True)
+    st.divider()
 
-if st.sidebar.button("🚪 Sair do Sistema", use_container_width=True):
-    st.session_state.logado = False
-    st.session_state.usuario = ""
-    st.session_state.perfil = ""
-    st.rerun()
+    menu = st.radio(
+        "Navegação Principal",
+        ["📊 Dashboard", "👥 Membros", "💰 Financeiro", "⚽ Jogos", "🏆 Scout", "📄 Relatórios PDF", "⚙️ Painel Admin"]
+    )
 
-st.sidebar.divider()
+    st.divider()
 
-menu = st.sidebar.radio(
-    "Navegação Principal",
-    ["📊 Dashboard", "👥 Membros", "💰 Financeiro", "⚽ Jogos", "🏆 Scout", "📄 Relatórios PDF", "⚙️ Painel Admin"]
-)
-
-st.sidebar.divider()
+    # Botão de sair posicionado no final da sidebar
+    if st.button("🚪 Sair do Sistema", use_container_width=True):
+        st.session_state.logado = False
+        st.session_state.usuario = ""
+        st.session_state.perfil = ""
+        st.rerun()
 
     # ==========================================
     # ⚙️ PAINEL ADMIN
