@@ -98,97 +98,183 @@ iniciar_banco()
 
 # --- CLASSE PDF RELATÓRIO ---
 class PDFRelatorio(FPDF):
-    def __init__(self, titulo):
+    def __init__(self, titulo_relatorio=""):
         super().__init__()
-        self.titulo_relatorio = titulo
-    
+        self.titulo_relatorio = titulo_relatorio
+
     def header(self):
+        # LOGO DO TIME
         if os.path.exists("meu_time.png"):
-            try: self.image("meu_time.png", 10, 8, 15)
-            except: pass
+            self.image("meu_time.png", 10, 8, 12)
+
         self.set_font("Helvetica", "B", 11)
-        self.cell(0, 8, f"GESTÃO TIME DE VÁRZEA - {self.titulo_relatorio}", 0, 1, "C")
-        self.set_font("Helvetica", "I", 8)
-        self.cell(0, 4, "DTBRAS SOLUÇÕES TECNOLÓGICAS - CNPJ: 32.608.676/0001-59", 0, 1, "C")
-        self.ln(4)
+        # AQUI ESTAVA O ERRO: GESTÃO TIME DE VÁRZEA (Certifique-se do R aqui!)
+        self.cell(0, 6, "GESTÃO TIME DE VÁRZEA - UNIÃO ITAPURA F.C.", 0, 1, "C")
+        self.set_font("Helvetica", "B", 8)
+        self.cell(0, 5, "DTBRAS SOLUÇÕES TECNOLÓGICAS - CNPJ: 32.608.676/0001-59", 0, 1, "C")
+        self.ln(3)
 
     def footer(self):
         self.set_y(-12)
         self.set_font("Helvetica", "I", 8)
         self.cell(0, 8, "Programa desenvolvido por DTBRAS Soluções Tecnológicas - CNPJ: 32.608.676/0001-59 | Página " + str(self.page_no()), 0, 0, "C")
 
-# --- CONTROLE DE SESSÃO / LOGIN ---
+# --- CONTROLE DE SESSÃO / LOGIN & TIMEOUT (5 Minutos) ---
+TEMPO_LIMITE_INATIVIDADE = timedelta(minutes=5)
+
 if 'logado' not in st.session_state:
     st.session_state.logado = False
     st.session_state.usuario = ""
     st.session_state.perfil = ""
+    st.session_state.ultima_atividade = datetime.now()
 
-def tela_login():
-    if os.path.exists("meu_time.png"):
-        col_img1, col_img2, col_img3 = st.columns([2, 1, 2])
-        with col_img2:
-            st.image("meu_time.png", width=120)
-    
-    st.markdown("<h2 style='text-align: center;'>GESTÃO TIME DE VÁRZEA</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: gray;'>Desenvolvido por DTBRAS Soluções Tecnológicas - CNPJ: 32.608.676/0001-59</p>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        with st.form("form_login"):
-            usuario = st.text_input("Usuário")
-            senha = st.text_input("Senha", type="password")
-            submit = st.form_submit_button("Entrar no Sistema", use_container_width=True)
+# Verifica se estourou o tempo de inatividade
+if st.session_state.logado:
+    tempo_inativo = datetime.now() - st.session_state.ultima_atividade
+    if tempo_inativo > TEMPO_LIMITE_INATIVIDADE:
+        st.session_state.logado = False
+        st.session_state.usuario = ""
+        st.session_state.perfil = ""
+        st.warning("⚠️ Sessão expirada por inatividade (mais de 5 minutos sem uso). Faça o login novamente.")
+        st.rerun()
+    else:
+        # Atualiza o cronômetro a cada ação do usuário
+        st.session_state.ultima_atividade = datetime.now()
+
+
+with tab_adm2:
+            st.subheader("Gerenciar Usuários, Acessos e Redefinição de Senhas")
+            if 'edit_user_id' not in st.session_state:
+                st.session_state.edit_user_id = None
+
+            df_users_all = pd.read_sql("SELECT id, usuario, perfil FROM usuarios ORDER BY usuario ASC", conn)
+            with st.expander("🔍 Pesquisar / Selecionar Usuários", expanded=True):
+                termo_u = st.text_input("Pesquisar usuário por nome:")
+                if not df_users_all.empty:
+                    lista_opcoes_users = {f"ID {row['id']} - {row['usuario']} ({row['perfil']})": row['id'] for _, row in df_users_all.iterrows()}
+                    user_selecionado_str = st.selectbox("Selecione o usuário:", ["-- Novo Usuário --"] + list(lista_opcoes_users.keys()))
+                    
+                    col_u1, col_u2, col_u3 = st.columns(3)
+                    if col_u1.button("✏️ Carregar Usuário p/ Editar", key="btn_ed_user"):
+                        if user_selecionado_str != "-- Novo Usuário --":
+                            st.session_state.edit_user_id = lista_opcoes_users[user_selecionado_str]
+                            st.rerun()
+                    if col_u2.button("🧹 Limpar Seleção", key="btn_cl_user"):
+                        st.session_state.edit_user_id = None
+                        st.rerun()
+                    if col_u3.button("🗑️ Excluir Usuário", key="btn_del_user"):
+                        if user_selecionado_str != "-- Novo Usuário --":
+                            id_u_exc = lista_opcoes_users[user_selecionado_str]
+                            if id_u_exc == 1:
+                                st.error("Não é permitido excluir o usuário Administrador principal!")
+                            else:
+                                c = conn.cursor()
+                                c.execute("DELETE FROM usuarios WHERE id = %s", (id_u_exc,))
+                                conn.commit()
+                                c.close()
+                                st.session_state.edit_user_id = None
+                                st.success("Usuário excluído com sucesso!")
+                                st.rerun()
+
+            st.divider()
             
-            if submit:
-                conn = conectar_banco()
-                c = conn.cursor()
-                c.execute("SELECT perfil FROM usuarios WHERE usuario = %s AND senha = %s", (usuario, senha))
-                res = c.fetchone()
-                c.close()
-                conn.close()
+            # --- SEÇÃO DE REDEFINIÇÃO RÁPIDA DE SENHA PELO ADMIN ---
+            st.markdown("#### 🔑 Redefinição Rápida de Senha")
+            c_pass = conectar_banco()
+            cp = c_pass.cursor()
+            cp.execute("SELECT id, usuario FROM usuarios")
+            users_para_senha = cp.fetchall()
+            cp.close()
+            c_pass.close()
+            
+            if users_para_senha:
+                nicks_usuarios = [u[1] for u in users_para_senha]
+                usuario_alvo = st.selectbox("Selecione o usuário para alterar a senha:", nicks_usuarios, key="select_alt_senha_admin")
+                nova_senha_admin = st.text_input("Nova Senha para este usuário", type="password", key="input_nova_senha_admin")
                 
-                if res:
-                    st.session_state.logado = True
-                    st.session_state.usuario = usuario
-                    st.session_state.perfil = res[0]
-                    st.success("Login realizado com sucesso!")
-                    st.rerun()
-                else:
-                    st.error("Usuário ou senha incorretos!")
+                if st.button("💾 Salvar Nova Senha"):
+                    if nova_senha_admin:
+                        c_up = conectar_banco()
+                        cup = c_up.cursor()
+                        cup.execute("UPDATE usuarios SET senha = %s WHERE usuario = %s", (nova_senha_admin, usuario_alvo))
+                        c_up.commit()
+                        cup.close()
+                        c_up.close()
+                        st.success(f"Senha do usuário '{usuario_alvo}' redefinida com sucesso!")
+                    else:
+                        st.warning("Digite a nova senha antes de salvar.")
 
+            st.divider()
+            
+            user_atual = {"usuario": "", "senha": "", "perfil": "Diretor"}
+            if st.session_state.edit_user_id:
+                c = conn.cursor()
+                c.execute("SELECT usuario, senha, perfil FROM usuarios WHERE id = %s", (st.session_state.edit_user_id,))
+                res_u = c.fetchone()
+                c.close()
+                if res_u:
+                    user_atual = {"usuario": res_u[0], "senha": res_u[1], "perfil": res_u[2]}
+
+    with aba_recuperar:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### Recuperação de Senha")
+            st.write("Insira seu nome de usuário para cadastrar uma nova senha de acesso.")
+            with st.form("form_recuperar"):
+                user_rec = st.text_input("Nome de Usuário")
+                nova_senha_rec = st.text_input("Nova Senha Desejada", type="password")
+                submit_rec = st.form_submit_button("Redefinir Senha", use_container_width=True)
+                
+                if submit_rec:
+                    if user_rec and nova_senha_rec:
+                        conn = conectar_banco()
+                        c = conn.cursor()
+                        c.execute("SELECT id FROM usuarios WHERE usuario = %s", (user_rec,))
+                        existe = c.fetchone()
+                        if existe:
+                            c.execute("UPDATE usuarios SET senha = %s WHERE usuario = %s", (nova_senha_rec, user_rec))
+                            conn.commit()
+                            st.success("Senha redefinida com sucesso! Volte na aba 'Entrar no Sistema'.")
+                        else:
+                            st.error("Usuário não encontrado no sistema.")
+                        c.close()
+                        conn.close()
+                    else:
+                        st.warning("Preencha todos os campos.")
+
+    # ... aqui termina o bloco "else: st.warning("Preencha todos os campos.")" da função tela_login()
+
+# --- CONTROLE DE EXIBIÇÃO APÓS O LOGIN ---
 if not st.session_state.logado:
     tela_login()
-else:
-    # --- BARRA LATERAL ---
-    if os.path.exists("meu_time.png"):
-        st.sidebar.image("meu_time.png", width=100)
-    
-    st.sidebar.title("GESTÃO TIME DE VÁRZEA")
-    st.sidebar.markdown("**União Itapura F.C.**")
-    st.sidebar.write(f"Logado: **{st.session_state.usuario}** ({st.session_state.perfil})")
-    st.sidebar.divider()
+    st.stop()
 
-    st.sidebar.subheader("📌 Navegação")
-    
-    opcoes_menu = ["📊 Dashboard", "👥 Membros", "💰 Financeiro", "⚽ Jogos", "🏆 Scout", "📄 Relatórios PDF"]
-    if st.session_state.perfil == "Admin":
-        opcoes_menu.append("⚙️ Painel Admin")
+# --- MENU LATERAL DO SISTEMA ---
+st.sidebar.image("meu_time.png" if os.path.exists("meu_time.png") else "⚽", width=100)
+st.sidebar.markdown(f"### Olá, {st.session_state.usuario}!")
+st.sidebar.markdown(f"**Perfil:** {st.session_state.perfil}")
 
-    menu = st.sidebar.radio("Ir para:", opcoes_menu)
+if st.sidebar.button("🚪 Sair do Sistema", use_container_width=True):
+    st.session_state.logado = False
+    st.session_state.usuario = ""
+    st.session_state.perfil = ""
+    st.rerun()
 
-    st.sidebar.divider()
-    st.sidebar.markdown("<p style='font-size: 11px; color: gray;'><b>DTBRAS SOLUÇÕES TECNOLÓGICAS</b><br>CNPJ: 32.608.676/0001-59</p>", unsafe_allow_html=True)
-    
-    if st.sidebar.button("🚪 Sair / Logout", use_container_width=True):
-        st.session_state.logado = False
-        st.rerun()
+st.sidebar.divider()
 
-    conn = conectar_banco()
+menu = st.sidebar.radio(
+    "Navegação Principal",
+    ["📊 Dashboard", "👥 Membros", "💰 Financeiro", "⚽ Jogos", "🏆 Scout", "📄 Relatórios PDF", "⚙️ Painel Admin"]
+)
+
+st.sidebar.divider()
+
+# Logo abaixo já começam os seus ifs das abas (if menu == "⚙️ Painel Admin": ...)
 
     # ==========================================
     # ⚙️ PAINEL ADMIN
     # ==========================================
-    if menu == "⚙️ Painel Admin":
+if menu == "⚙️ Painel Admin":
         st.title("⚙️ Painel do Administrador - Gestão do Clube")
         
         tab_adm1, tab_adm2, tab_adm3, tab_adm4, tab_adm5, tab_adm6 = st.tabs([
@@ -581,7 +667,7 @@ else:
     # ==========================================
     # 📊 DASHBOARD
     # ==========================================
-    elif menu == "📊 Dashboard":
+elif menu == "📊 Dashboard":
         st.title("📊 GESTÃO TIME DE VÁRZEA - Painel Executivo")
         
         ativos = pd.read_sql("SELECT COUNT(*) FROM atletas WHERE status='Ativo'", conn).iloc[0,0]
@@ -635,7 +721,37 @@ else:
             st.subheader("📈 Movimentações Financeiras por Categoria")
             if not df_fin.empty:
                 df_grp = df_fin.groupby('tipo')['valor'].sum().reset_index()
-                st.bar_chart(df_grp.set_index('tipo'))
+                
+                # Calcula a porcentagem em relação ao total absoluto movimentado
+                total_abs = df_grp['valor'].abs().sum()
+                if total_abs > 0:
+                    df_grp['porcentagem'] = (df_grp['valor'].abs() / total_abs) * 100
+                    df_grp['rotulo_pct'] = df_grp['porcentagem'].apply(lambda x: f"{x:.1f}%")
+                else:
+                    df_grp['rotulo_pct'] = "0.0%"
+                
+                import altair as alt
+                
+                # Base do gráfico de barras
+                barras = alt.Chart(df_grp).mark_bar().encode(
+                    x=alt.X('tipo:N', title='Categoria', sort='-y', axis=alt.Axis(labelAngle=-45)),
+                    y=alt.Y('valor:Q', title='Valor (R$)'),
+                    color=alt.Color('tipo:N', legend=None)
+                )
+                
+                # Rótulos de texto com a porcentagem em cima/abaixo das barras
+                texto = alt.Chart(df_grp).mark_text(
+                    dy=-10,
+                    color='white',
+                    fontSize=11
+                ).encode(
+                    x=alt.X('tipo:N', sort='-y'),
+                    y=alt.Y('valor:Q'),
+                    text='rotulo_pct:N'
+                )
+                
+                chart = (barras + texto).properties(height=300)
+                st.altair_chart(chart, use_container_width=True)
             else:
                 st.info("Sem dados financeiros para exibir gráfico.")
 
@@ -657,21 +773,56 @@ else:
 
         with col_a:
             st.subheader("🎂 Aniversariantes (Próximos 3 Meses)")
-            hoje = datetime.now()
-            meses_validos = [(hoje.replace(day=1) + timedelta(days=32*i)).strftime("%m") for i in range(3)]
+            hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            limite_tres_meses = hoje + timedelta(days=90)
+            
+            dias_semana_pt = {
+                0: "Segunda-feira", 1: "Terça-feira", 2: "Quarta-feira",
+                3: "Quinta-feira", 4: "Sexta-feira", 5: "Sábado", 6: "Domingo"
+            }
             
             df_atletas = pd.read_sql("SELECT nome, nascimento FROM atletas WHERE status='Ativo'", conn)
             aniv_encontrados = []
-            for _, row in df_atletas.iterrows():
-                nasc = str(row['nascimento'])
-                if len(nasc) >= 5:
-                    if nasc[3:5] in meses_validos:
-                        aniv_encontrados.append(f"• **{row['nome']}** - Niver: {nasc}")
             
-            if aniv_encontrados:
-                for a in aniv_encontrados: st.write(a)
+            for _, row in df_atletas.iterrows():
+                nasc_str = str(row['nascimento'] or "").strip()
+                if len(nasc_str) >= 10:
+                    try:
+                        partes = nasc_str.split('/')
+                        dia_nasc = int(partes[0])
+                        mes_nasc = int(partes[1])
+                        ano_nasc = int(partes[2])
+                        
+                        # Testa o aniversário no ano atual e no próximo ano para abranger o intervalo de 90 dias
+                        for ano_ref in [hoje.year, hoje.year + 1]:
+                            try:
+                                aniv_dt = datetime(ano_ref, mes_nasc, dia_nasc)
+                            except ValueError:
+                                continue
+                                
+                            if hoje <= aniv_dt <= limite_tres_meses:
+                                idade_que_faz = aniv_dt.year - ano_nasc
+                                dia_semana = dias_semana_pt[aniv_dt.weekday()]
+                                data_formatada = aniv_dt.strftime(f"%d/%m ({dia_semana})")
+                                
+                                aniv_encontrados.append({
+                                    'data_obj': aniv_dt,
+                                    'Atleta': row['nome'],
+                                    'Data': data_formatada,
+                                    'Idade': f"{idade_que_faz} anos"
+                                })
+                    except:
+                        continue
+            
+            # Remove duplicatas caso caia no mesmo ano e ordena
+            aniv_unicos = {x['Atleta'] + x['Data']: x for x in aniv_encontrados}.values()
+            aniv_ordenados = sorted(aniv_unicos, key=lambda x: x['data_obj'])
+            
+            if aniv_ordenados:
+                df_aniv_final = pd.DataFrame(aniv_ordenados)[['Atleta', 'Data', 'Idade']]
+                st.dataframe(df_aniv_final, use_container_width=True, hide_index=True)
             else:
-                st.info("Nenhum aniversariante próximo.")
+                st.info("Nenhum aniversariante próximo nos próximos 3 meses.")
 
         with col_b:
             st.subheader("🏆 Top Artilheiros & Assistências")
@@ -688,7 +839,7 @@ else:
     # ==========================================
     # 👥 MEMBROS
     # ==========================================
-    elif menu == "👥 Membros":
+elif menu == "👥 Membros":
         st.title("👥 Gestão de Membros & Identificação")
         if 'edit_membro_id' not in st.session_state:
             st.session_state.edit_membro_id = None
@@ -790,7 +941,7 @@ else:
     # ==========================================
     # 💰 FINANCEIRO
     # ==========================================
-    elif menu == "💰 Financeiro":
+elif menu == "💰 Financeiro":
         st.title("💰 Controle Financeiro & Calendário de Mensalidades")
         tab1, tab2 = st.tabs(["💵 Lançamentos Gerais", "📅 Calendário de Mensalidades & Relatório"])
         
@@ -964,7 +1115,7 @@ else:
     # ==========================================
     # ⚽ JOGOS & SÚMULA
     # ==========================================
-    elif menu == "⚽ Jogos":
+elif menu == "⚽ Jogos":
         st.title("⚽ Cadastro de Partidas & Súmula de Presença")
         if 'edit_jogo_id' not in st.session_state:
             st.session_state.edit_jogo_id = None
@@ -1096,7 +1247,7 @@ else:
     # ==========================================
     # 🏆 SCOUT
     # ==========================================
-    elif menu == "🏆 Scout":
+elif menu == "🏆 Scout":
         st.title("🏆 Registro de Gols e Assistências")
         if 'edit_scout_id' not in st.session_state:
             st.session_state.edit_scout_id = None
@@ -1175,225 +1326,552 @@ else:
     # ==========================================
     # 📄 RELATÓRIOS PDF
     # ==========================================
-    elif menu == "📄 Relatórios PDF":
+elif menu == "📄 Relatórios PDF":
         st.title("📄 Central de Relatórios em PDF")
         col_r1, col_r2 = st.columns(2)
         
         with col_r1:
             # 1. RELATÓRIO FINANCEIRO
             if st.button("📥 Gerar PDF: Relatório Financeiro (Tabela)", use_container_width=True):
-                pdf = PDFRelatorio("RELATÓRIO FINANCEIRO & MENSALISTAS")
-                pdf.add_page()
+                data_hora_impressao = datetime.now().strftime("%d/%m/%Y - %H:%Mh")
+                usuario_impressor = st.session_state.usuario
                 
-                pdf.set_font("Helvetica", "B", 9)
+                pdf = PDFRelatorio("RELATÓRIO FINANCEIRO & MENSALISTAS")
+                pdf.add_page(orientation='L') # Paisagem
+                
+                # Cabeçalho de controle de impressão no topo
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_text_color(50, 50, 50)
+                pdf.cell(0, 5, f"IMPRESSÃO: {data_hora_impressao} - {usuario_impressor}", 0, 1, "R")
+                pdf.ln(1)
+                
+                # Cabeçalho da Tabela (Soma exata = 277mm)
+                # 20 + 26 + 48 + 24 + 129 + 30 = 277mm
+                pdf.set_font("Helvetica", "B", 8)
                 pdf.set_fill_color(220, 220, 220)
-                pdf.cell(22, 7, "Data", 1, 0, "C", True)
-                pdf.cell(32, 7, "Tipo / Ref", 1, 0, "C", True)
-                pdf.cell(24, 7, "Valor (R$)", 1, 0, "C", True)
-                pdf.cell(72, 7, "Observacao / Detalhes", 1, 0, "C", True)
-                pdf.cell(40, 7, "Responsavel", 1, 1, "C", True)
+                pdf.set_text_color(0, 0, 0)
+                
+                pdf.cell(20, 7, "DATA", 1, 0, "C", True)
+                pdf.cell(26, 7, "CATEGORIA", 1, 0, "C", True)
+                pdf.cell(48, 7, "REFERÊNCIA", 1, 0, "C", True)
+                pdf.cell(24, 7, "VALOR (R$)", 1, 0, "C", True)
+                pdf.cell(129, 7, "OBSERVAÇÃO", 1, 0, "C", True)
+                pdf.cell(30, 7, "REGISTRO", 1, 1, "C", True)
                 
                 c = conn.cursor()
-                c.execute("SELECT data, tipo, valor, referencia, observacao, criado_por FROM financeiro ORDER BY id DESC")
+                query_pdf_fin = """
+                    SELECT f.data, f.tipo, f.referencia, f.valor, f.observacao, f.criado_por, f.data_registro, a.nome 
+                    FROM financeiro f 
+                    LEFT JOIN atletas a ON f.atleta_id = a.id 
+                    ORDER BY f.id DESC
+                """
+                c.execute(query_pdf_fin)
                 registros_fin = c.fetchall()
                 c.close()
                 
-                pdf.set_font("Helvetica", "", 8)
+                pdf.set_font("Helvetica", "", 7.5)
                 soma_total = 0.0
                 
                 for r in registros_fin:
                     dt = str(r[0] or "")
                     tp = str(r[1] or "")
-                    if r[3]: tp += f" ({r[3]})"
-                    val_num = float(r[2] or 0.0)
+                    
+                    ref_original = str(r[2] or "")
+                    nome_atleta = str(r[7] or "")
+                    
+                    if tp == "Mensalidade" and nome_atleta:
+                        ref_str = f"{ref_original} - {nome_atleta}"
+                    elif nome_atleta:
+                        ref_str = f"{ref_original} ({nome_atleta})" if ref_original else nome_atleta
+                    else:
+                        ref_str = ref_original if ref_original else "-"
+                        
+                    val_num = float(r[3] or 0.0)
                     soma_total += val_num
                     val_str = f"R$ {val_num:.2f}"
                     obs = str(r[4] or "-")
-                    resp = str(r[5] or "")
                     
-                    x_start = pdf.get_x()
-                    y_start = pdf.get_y()
+                    criado_por = str(r[5] or "-")
+                    data_reg = str(r[6] or "")
+                    reg_str = f"{criado_por}\n{data_reg}" if data_reg else criado_por
                     
-                    pdf.cell(22, 6, dt, 1, 0, "C")
-                    pdf.cell(32, 6, tp, 1, 0, "L")
-                    pdf.cell(24, 6, val_str, 1, 0, "R")
+                    altura_linha = 7.0
                     
-                    x_obs = pdf.get_x()
-                    y_obs = pdf.get_y()
-                    pdf.multi_cell(72, 6, obs, 1, "L")
-                    y_after_obs = pdf.get_y()
+                    # Verificação nativa de quebra de página do FPDF (evita espaços em branco indesejados)
+                    if pdf.get_y() > 185:
+                        pdf.add_page(orientation='L')
+                        pdf.set_font("Helvetica", "B", 8)
+                        pdf.set_fill_color(220, 220, 220)
+                        pdf.cell(20, 7, "DATA", 1, 0, "C", True)
+                        pdf.cell(26, 7, "CATEGORIA", 1, 0, "C", True)
+                        pdf.cell(48, 7, "REFERÊNCIA", 1, 0, "C", True)
+                        pdf.cell(24, 7, "VALOR (R$)", 1, 0, "C", True)
+                        pdf.cell(129, 7, "OBSERVAÇÃO", 1, 0, "C", True)
+                        pdf.cell(30, 7, "REGISTRO", 1, 1, "C", True)
+                        pdf.set_font("Helvetica", "", 7.5)
+
+                    # Impressão sequencial fluida (Garante que a linha seguinte cole perfeitamente na anterior)
+                    pdf.cell(20, altura_linha, dt, 1, 0, "C")
+                    pdf.cell(26, altura_linha, tp, 1, 0, "L")
+                    pdf.cell(48, altura_linha, ref_str[:32], 1, 0, "L")
+                    pdf.cell(24, altura_linha, val_str, 1, 0, "R")
                     
-                    altura_util = max(6, y_after_obs - y_obs)
-                    pdf.set_xy(x_start + 22 + 32 + 24 + 72, y_start)
-                    pdf.cell(40, altura_util, resp, 1, 1, "L")
-                
+                    # Observação com corte seguro
+                    pdf.cell(129, altura_linha, obs[:85], 1, 0, "L")
+                    
+                    # Coluna de Registro formatada em bloco centralizado
+                    x_reg = pdf.get_x()
+                    y_reg = pdf.get_y()
+                    pdf.cell(30, altura_linha, "", 1, 0, "C")
+                    pdf.set_xy(x_reg, y_reg + 1)
+                    pdf.set_font("Helvetica", "", 6.5)
+                    pdf.multi_cell(30, 3, reg_str, 0, "C")
+                    pdf.set_font("Helvetica", "", 7.5)
+                    
+                    # Pula para a linha de baixo perfeitamente encaixada
+                    pdf.set_xy(pdf.l_margin, y_reg + altura_linha)
+
+                # Linha de Total Geral em Caixa com Cores Condicionais (Azul Bic ou Vermelho)
                 pdf.set_font("Helvetica", "B", 9)
                 pdf.set_fill_color(240, 240, 240)
-                pdf.cell(78, 7, "VALOR TOTAL GERAL EM CAIXA:", 1, 0, "R", True)
-                pdf.cell(24, 7, f"R$ {soma_total:.2f}", 1, 0, "R", True)
-                pdf.cell(88, 7, "", 1, 1, "C", True)
+                pdf.cell(94, 8, "VALOR TOTAL GERAL EM CAIXA:", 1, 0, "R", True)
                 
-                # Gera o PDF em bytes para download direto
-                pdf_bytes = pdf.output(dest='S').encode('latin1')
-                st.success("PDF Financeiro gerado com sucesso!")
-                st.download_button(
-                    label="⬇️ Baixar Arquivo PDF Financeiro",
-                    data=pdf_bytes,
-                    file_name="Relatorio_Financeiro.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-
-            # 2. RELAÇÃO DE MEMBROS
-            if st.button("📥 Gerar PDF: Relação de Membros Completa", use_container_width=True):
-                pdf = PDFRelatorio("RELAÇÃO DE MEMBROS E COLABORADORES")
-                pdf.add_page()
+                if soma_total >= 0:
+                    pdf.set_text_color(0, 0, 128) # Azul escuro tipo caneta BIC
+                else:
+                    pdf.set_text_color(255, 0, 0)  # Vermelho
+                    
+                pdf.cell(24, 8, f"R$ {soma_total:.2f}", 1, 0, "R", True)
                 
-                c = conn.cursor()
-                c.execute("SELECT id, nome, documentos, nascimento, posicao, telefone, cargo, status, nome_mae, endereco, criado_por, data_registro FROM atletas ORDER BY nome ASC")
-                for r in c.fetchall():
-                    reg_id = f"REG-{r[0]:04d}"
-                    pdf.set_font("Helvetica", "B", 10)
-                    pdf.cell(0, 6, f"[{reg_id}] {r[1]} ({r[6]}) - Status: {r[7]}", 0, 1)
-                    pdf.set_font("Helvetica", "", 9)
-                    pdf.cell(0, 5, f"Documentos (RG/CPF): {r[2]} | Nasc: {r[3]} | Posição: {r[4]}", 0, 1)
-                    pdf.cell(0, 5, f"Nome da Mãe: {r[8]} | Tel: {r[5]}", 0, 1)
-                    pdf.cell(0, 5, f"Endereço: {r[9]} | Cadastrado por: {r[10]} em {r[11]}", 0, 1)
-                    pdf.ln(3)
-                c.close()
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(159, 8, "", 1, 1, "C", True)
                 
                 pdf_bytes = pdf.output(dest='S').encode('latin1')
-                st.success("PDF de Membros gerado com sucesso!")
+                st.success("PDF Financeiro ajustado com sucesso!")
                 st.download_button(
-                    label="⬇️ Baixar Arquivo PDF de Membros",
+                    label="📥 Baixar Arquivo PDF Financeiro Definitivo",
                     data=pdf_bytes,
-                    file_name="Relatorio_Membros.pdf",
+                    file_name="Relatorio_Financeiro_Definitivo.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
 
         with col_r2:
-            # 3. RESUMO DE JOGOS
+            # 2. RELATÓRIO DE MEMBROS / ATLETAS
+            if st.button("📥 Gerar PDF: Relatório de Membros", use_container_width=True):
+                data_hora_impressao = datetime.now().strftime("%d/%m/%Y - %H:%Mh")
+                usuario_impressor = st.session_state.usuario
+                
+                pdf = PDFRelatorio("RELATÓRIO DE MEMBROS E ATLETAS - UNIÃO ITAPURA F.C.")
+                pdf.add_page(orientation='P') # Retrato
+                
+                # Cabeçalho de controle de impressão
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_text_color(50, 50, 50)
+                pdf.cell(0, 5, f"IMPRESSÃO: {data_hora_impressao} - {usuario_impressor}", 0, 1, "R")
+                pdf.ln(2)
+                
+                c = conn.cursor()
+                query_pdf_membros = "SELECT * FROM atletas ORDER BY nome ASC"
+                c.execute(query_pdf_membros)
+                membros = c.fetchall()
+                
+                colunas = [desc[0] for desc in c.description]
+                c.close()
+                
+                def get_val(linha, possiveis_nomes, padrao="-"):
+                    for nome_col in possiveis_nomes:
+                        if nome_col in colunas:
+                            idx = colunas.index(nome_col)
+                            val = linha[idx]
+                            return str(val) if val is not None and str(val).strip() != "" else padrao
+                    return padrao
+
+                for m in membros:
+                    reg_id = f"REG-{int(m[0]):04d}" if m[0] else "REG-0000"
+                    nome = get_val(m, ['nome'], 'Sem Nome')
+                    funcao = get_val(m, ['tipo', 'funcao', 'cargo'], 'Jogador')
+                    status = get_val(m, ['status'], 'Ativo')
+                    
+                    # Puxa o campo 'documentos' unificado do banco de dados
+                    documentos = get_val(m, ['documentos', 'rg', 'cpf'], '-')
+                    
+                    nasc = get_val(m, ['data_nascimento', 'nascimento'], '-')
+                    posicao = get_val(m, ['posicao'], '-')
+                    mae = get_val(m, ['nome_mae', 'mae'], '-')
+                    tel = get_val(m, ['telefone', 'tel'], '-')
+                    end = get_val(m, ['endereco'], '-')
+                    cad_por = get_val(m, ['criado_por', 'cadastrado_por'], 'admin')
+                    cad_data = get_val(m, ['data_criacao', 'data_cadastro'], '-')
+                    
+                    if pdf.get_y() > 255:
+                        pdf.add_page(orientation='P')
+                    
+                    # Bloco Individual do Atleta (Card)
+                    pdf.set_fill_color(245, 245, 245)
+                    pdf.set_draw_color(200, 200, 200)
+                    
+                    pdf.set_font("Helvetica", "B", 9)
+                    pdf.set_text_color(0, 0, 128)
+                    pdf.cell(190, 6, f"[{reg_id}] {nome} ({funcao}) - Status: {status}", 1, 1, "L", True)
+                    
+                    pdf.set_font("Helvetica", "", 8)
+                    pdf.set_text_color(0, 0, 0)
+                    
+                    # Exibe o documento unificado preenchido corretamente
+                    pdf.cell(95, 5, f"Documentos (RG/CPF): {documentos}", "LR", 0, "L")
+                    pdf.cell(95, 5, f"Nascimento: {nasc} | Posição: {posicao}", "R", 1, "L")
+                    
+                    pdf.cell(95, 5, f"Mãe: {mae}", "LR", 0, "L")
+                    pdf.cell(95, 5, f"Telefone / WhatsApp: {tel}", "R", 1, "L")
+                    
+                    pdf.cell(190, 5, f"Endereço: {end}", "LR", 1, "L")
+                    
+                    pdf.set_font("Helvetica", "I", 7)
+                    pdf.set_text_color(100, 100, 100)
+                    pdf.cell(190, 5, f"Cadastrado por: {cad_por} em {cad_data}", "LBR", 1, "L", True)
+                    
+                    pdf.ln(3)
+                
+                pdf_bytes = pdf.output(dest='S').encode('latin1')
+                st.success("PDF de Membros organizado com sucesso!")
+                st.download_button(
+                    label="⬇️ Baixar Arquivo PDF de Membros Organizado",
+                    data=pdf_bytes,
+                    file_name="Relatorio_Membros_Organizado.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+
+        with col_r1:
+            # 3. RELATÓRIO DE JOGOS / PARTIDAS
             if st.button("📥 Gerar PDF: Resumo de Jogos Completo", use_container_width=True):
-                pdf = PDFRelatorio("RELATORIO DE JOGOS E PRESENCA")
-                pdf.add_page()
+                data_hora_impressao = datetime.now().strftime("%d/%m/%Y - %H:%Mh")
+                usuario_impressor = st.session_state.usuario
                 
-                c = conn.cursor()
-                c.execute("SELECT id, data, adversario, placar_uniao, placar_adv, local, penaltis, resultado FROM jogos ORDER BY id DESC")
-                jogos_db = c.fetchall()
+                pdf = PDFRelatorio("RELATÓRIO DE PARTIDAS & JOGOS - UNIÃO ITAPURA F.C.")
+                pdf.add_page(orientation='P') # Retrato
                 
-                for j in jogos_db:
-                    jid = j[0]
-                    jdata = j[1]
-                    jadv = j[2]
-                    pu = j[3]
-                    pa = j[4]
-                    res = j[7]
-                    pen = j[6]
-                    
-                    pdf.set_font("Helvetica", "B", 10)
-                    pdf.cell(0, 6, f"DATA: {jdata} | UNIAO {pu} x {pa} {jadv} ({res})", 0, 1)
-                    
-                    c_tec = conn.cursor()
-                    c_tec.execute("SELECT nome FROM atletas WHERE cargo='Técnico' AND status='Ativo' LIMIT 1")
-                    res_tec = c_tec.fetchone()
-                    c_tec.close()
-                    nome_tecnico = res_tec[0] if res_tec else "Não informado"
-                    
-                    pdf.set_font("Helvetica", "I", 9)
-                    pdf.cell(0, 5, f"Comissão Técnica (Técnico): {nome_tecnico}", 0, 1)
-                    
-                    if pen and pen.strip() != "":
-                        pdf.cell(0, 5, f"Disputa de Penaltis: {pen}", 0, 1)
-                    
-                    c_sc = conn.cursor()
-                    c_sc.execute("""SELECT a.nome, s.gols, s.assistencias 
-                                    FROM scouts s JOIN atletas a ON s.atleta_id = a.id 
-                                    WHERE s.jogo_id = %s""", (jid,))
-                    scouts_j = c_sc.fetchall()
-                    c_sc.close()
-                    
-                    if scouts_j:
+                # Cabeçalho de controle de impressão
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_text_color(50, 50, 50)
+                pdf.cell(0, 5, f"IMPRESSÃO: {data_hora_impressao} - {usuario_impressor}", 0, 1, "R")
+                pdf.ln(2)
+                
+                try:
+                    conn.rollback()
+                except:
+                    pass
+                
+                cj = conn.cursor()
+                # Puxa os jogos usando exatamente os nomes reais das colunas da sua tabela 'jogos'
+                cj.execute("SELECT id, data, adversario, local, placar_uniao, placar_adv, resultado FROM jogos ORDER BY id DESC")
+                jogos = cj.fetchall()
+                
+                if jogos:
+                    for j in jogos:
+                        jid = j[0]
+                        dt_jogo = str(j[1] or "Data não informada")
+                        adversario = str(j[2] or "Jogo Oficial")
+                        gp = int(j[4] if j[4] is not None else 0)
+                        gc = int(j[5] if j[5] is not None else 0)
+                        res_db = str(j[6] or "")
+                        
+                        # Determina resultado e texto do placar
+                        if not res_db:
+                            if gp > gc: res_db = "Vitória"
+                            elif gp == gc: res_db = "Empate"
+                            else: res_db = "Derrota"
+                            
+                        placar_str = f"UNIÃO {gp} x {gc} {adversario} ({res_db})"
+                        
+                        # Busca os Gols e Assistências (Scouts) deste jogo específico
+                        cj.execute("""
+                            SELECT a.nome, s.gols, s.assistencias 
+                            FROM scouts s 
+                            JOIN atletas a ON s.atleta_id = a.id 
+                            WHERE s.jogo_id = %s AND (s.gols > 0 OR s.assistencias > 0)
+                            ORDER BY s.gols DESC, a.nome ASC
+                        """, (jid,))
+                        scouts_jogo = cj.fetchall()
+                        
+                        gols_det_linhas = []
+                        if scouts_jogo:
+                            for sg in scouts_jogo:
+                                nome_atleta = sg[0]
+                                q_gols = sg[1] or 0
+                                q_assists = sg[2] or 0
+                                gols_det_linhas.append(f"- {nome_atleta}: {q_gols} Gols e {q_assists} Assistências")
+                        
+                        # Busca os Atletas Presentes na Súmula deste jogo
+                        cj.execute("""
+                            SELECT a.nome 
+                            FROM presencas p 
+                            JOIN atletas a ON p.atleta_id = a.id 
+                            WHERE p.jogo_id = %s AND p.presenca = 1 
+                            ORDER BY a.nome ASC
+                        """, (jid,))
+                        presencas_jogo = cj.fetchall()
+                        
+                        lista_presencas = [p[0] for p in presencas_jogo]
+                        presencas_str = ", ".join(lista_presencas) if lista_presencas else "Nenhuma presença registrada."
+                        
+                        if pdf.get_y() > 230:
+                            pdf.add_page(orientation='P')
+                        
+                        # Bloco / Card da Partida (Padrão de cores idêntico ao de Membros)
+                        pdf.set_fill_color(245, 245, 245)
+                        pdf.set_draw_color(200, 200, 200)
+                        
+                        # Cabeçalho do Card (Azul Escuro)
                         pdf.set_font("Helvetica", "B", 9)
-                        pdf.cell(0, 5, "Gols e Assistências:", 0, 1)
-                        for sc in scouts_j:
-                            nome_atl = sc[0]
-                            g = sc[1]
-                            a_st = sc[2]
-                            pdf.set_font("Helvetica", "", 9)
-                            pdf.cell(0, 5, f"  - {nome_atl}: {g} Gols e {a_st} Assistências", 0, 1)
-                    
-                    c_pr = conn.cursor()
-                    c_pr.execute("""SELECT a.nome FROM presencas p 
-                                    JOIN atletas a ON p.atleta_id = a.id 
-                                    WHERE p.jogo_id = %s AND p.presenca = 1""", (jid,))
-                    pres_j = c_pr.fetchall()
-                    c_pr.close()
-                    if pres_j:
-                        pdf.set_font("Helvetica", "B", 9)
-                        pdf.cell(0, 5, "Presenças em Campo:", 0, 1)
+                        pdf.set_text_color(0, 0, 128)
+                        pdf.cell(190, 6, f"  DATA: {dt_jogo} | {placar_str}", 1, 1, "L", True)
+                        
+                        # Comissão Técnica fixa ou padrão do clube
+                        pdf.set_font("Helvetica", "B", 8)
+                        pdf.set_text_color(50, 50, 50)
+                        pdf.cell(190, 5, "  Comissão Técnica (Técnico): Edenicio Lopes Feitosa", "LR", 1, "L")
+                        
+                        # Gols e Assistências
+                        pdf.set_font("Helvetica", "B", 8)
+                        pdf.set_text_color(0, 0, 0)
+                        pdf.cell(190, 5, "  Gols e Assistências:", "LR", 1, "L")
+                        
                         pdf.set_font("Helvetica", "", 8)
-                        lista_nomes_pres = [p[0] for p in pres_j]
-                        texto_presencas = ", ".join(lista_nomes_pres)
-                        pdf.multi_cell(0, 4, texto_presencas, 0, "L")
-                    pdf.ln(4)
-                c.close()
+                        if gols_det_linhas:
+                            for linha_g in gols_det_linhas:
+                                pdf.cell(190, 4.5, f"    {linha_g}", "LR", 1, "L")
+                        else:
+                            pdf.cell(190, 4.5, "    Nenhum detalhe de gols registrado.", "LR", 1, "L")
+                        
+                        # Presenças em Campo
+                        pdf.set_font("Helvetica", "B", 8)
+                        pdf.cell(190, 5, "  Presenças em Campo:", "LR", 1, "L")
+                        
+                        pdf.set_font("Helvetica", "", 7.5)
+                        pdf.multi_cell(190, 4.5, f"    {presencas_str}", "LR", "L")
+                        
+                        # Rodapé do Card do Jogo
+                        pdf.set_font("Helvetica", "I", 7)
+                        pdf.set_text_color(100, 100, 100)
+                        pdf.cell(190, 5, "  Ficha técnica validada pelo sistema do clube", "LBR", 1, "L", True)
+                        
+                        pdf.ln(4)
+                else:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.cell(190, 10, "Nenhuma partida registrada no sistema até o momento.", 1, 1, "C")
                 
+                cj.close()
+
                 pdf_bytes = pdf.output(dest='S').encode('latin1')
-                st.success("PDF de Jogos gerado com sucesso!")
+                st.success("Relatório de Jogos organizado com sucesso!")
                 st.download_button(
-                    label="⬇️ Baixar Arquivo PDF de Jogos",
+                    label="📥 Baixar Arquivo PDF: Relatório de Jogos Organizado",
                     data=pdf_bytes,
-                    file_name="Relatorio_Jogos.pdf",
+                    file_name="Relatorio_Jogos_Organizado.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
 
-            # 4. RESUMO GERAL CONSOLIDADO
+        with col_r2:
+            # 4. RESUMO GERAL CONSOLIDADO COMPLETO
             if st.button("📥 Gerar PDF: Resumo Geral Consolidado Completo", use_container_width=True):
-                pdf = PDFRelatorio("RESUMO GERAL DO CLUBE - CONSOLIDADO")
-                pdf.add_page()
+                data_hora_impressao = datetime.now().strftime("%d/%m/%Y - %H:%Mh")
+                usuario_impressor = st.session_state.usuario
                 
-                c = conn.cursor()
-                c.execute("SELECT COUNT(*) FROM atletas WHERE status='Ativo'")
-                tot_at = c.fetchone()[0]
-                c.execute("SELECT COUNT(*) FROM jogos")
-                tot_jog = c.fetchone()[0]
-                c.execute("SELECT SUM(valor) FROM financeiro")
-                tot_fin = c.fetchone()[0] or 0.0
+                pdf = PDFRelatorio("RELATÓRIO DE RESUMO GERAL & CONSOLIDADO - UNIÃO ITAPURA F.C.")
+                pdf.add_page(orientation='P') # Retrato
                 
-                pdf.set_font("Helvetica", "B", 11)
-                pdf.cell(0, 7, "1. SITUACAO GERAL E ESTATISTICAS", 0, 1)
-                pdf.set_font("Helvetica", "", 10)
-                pdf.cell(0, 5, f"Total de Atletas Ativos: {tot_at}", 0, 1)
-                pdf.cell(0, 5, f"Total de Partidas Registradas: {tot_jog}", 0, 1)
-                pdf.cell(0, 5, f"Movimentacao Financeira Total: R$ {tot_fin:.2f}", 0, 1)
+                # Cabeçalho de controle de impressão
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_text_color(50, 50, 50)
+                pdf.cell(0, 5, f"IMPRESSÃO: {data_hora_impressao} - {usuario_impressor}", 0, 1, "R")
+                pdf.ln(2)
+                
+                try:
+                    conn.rollback()
+                except:
+                    pass
+                
+                # 1. Coleta de Dados para o Painel Executivo
+                c1 = conn.cursor()
+                c1.execute("SELECT COUNT(*) FROM atletas WHERE status = 'Ativo' OR status IS NULL")
+                total_ativos = c1.fetchone()[0] or 0
+                c1.close()
+                
+                c2 = conn.cursor()
+                c2.execute("SELECT SUM(valor) FROM financeiro")
+                res_caixa = c2.fetchone()[0]
+                saldo_caixa = float(res_caixa) if res_caixa else 0.0
+                c2.close()
+                
+                try:
+                    c3 = conn.cursor()
+                    c3.execute("SELECT COUNT(*), SUM(CASE WHEN resultado = 'Vitória' THEN 1 ELSE 0 END), SUM(CASE WHEN resultado = 'Empate' THEN 1 ELSE 0 END), SUM(CASE WHEN resultado = 'Derrota' THEN 1 ELSE 0 END) FROM jogos")
+                    j_info = c3.fetchone()
+                    total_jogos = j_info[0] or 0
+                    vitorias = j_info[1] or 0
+                    empates = j_info[2] or 0
+                    derrotas = j_info[3] or 0
+                    c3.close()
+                except:
+                    total_jogos, vitorias, empates, derrotas = 0, 0, 0, 0
+
+                # --- SEÇÃO 1: PAINEL EXECUTIVO & GRÁFICO DE INDICADORES ---
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.set_fill_color(245, 245, 245)
+                pdf.set_text_color(0, 0, 128)
+                pdf.cell(190, 6, "  1. PAINEL EXECUTIVO & INDICADORES DO CLUBE", 1, 1, "L", True)
+                
+                pdf.set_font("Helvetica", "", 8)
+                pdf.set_text_color(0, 0, 0)
+                
+                pdf.cell(95, 6, f"   Membros Ativos: {total_ativos}", "LR", 0, "L")
+                saldo_cor_str = f"R$ {saldo_caixa:.2f}"
+                pdf.cell(95, 6, f"   Saldo Total em Caixa: {saldo_cor_str}", "R", 1, "L")
+                
+                # Bloco Gráfico / Indicadores de Desempenho do Time (Usando caracteres seguros para latin-1)
+                barra_v = "X" * vitorias if vitorias > 0 else "-"
+                barra_e = "X" * empates if empates > 0 else "-"
+                barra_d = "X" * derrotas if derrotas > 0 else "-"
+                
+                pdf.cell(190, 6, f"   Desempenho em Campo -> Jogos: {total_jogos} | Vitórias: {vitorias} [{barra_v}] | Empates: {empates} [{barra_e}] | Derrotas: {derrotas} [{barra_d}]", "LBR", 1, "L")
                 pdf.ln(4)
+
+                # --- SEÇÃO 2: RESUMO DOS JOGOS ---
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.set_fill_color(245, 245, 245)
+                pdf.set_text_color(0, 0, 128)
+                pdf.cell(190, 6, "  2. RESUMO DE PARTIDAS E JOGOS", 1, 1, "L", True)
                 
-                pdf.set_font("Helvetica", "B", 11)
-                pdf.cell(0, 7, "2. RELACAO DE MEMBROS", 0, 1)
-                c.execute("SELECT id, nome, posicao, status FROM atletas ORDER BY nome ASC")
-                for m in c.fetchall():
-                    pdf.set_font("Helvetica", "", 9)
-                    pdf.cell(0, 5, f"- [REG-{m[0]:04d}] {m[1]} | Posicao: {m[2]} | Status: {m[3]}", 0, 1)
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_fill_color(220, 220, 220)
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(25, 6, "DATA", 1, 0, "C", True)
+                pdf.cell(85, 6, "ADVERSÁRIO / CAMPO", 1, 0, "L", True)
+                pdf.cell(40, 6, "PLACAR", 1, 0, "C", True)
+                pdf.cell(40, 6, "RESULTADO", 1, 1, "C", True)
+                
+                ultimos_jogos = []
+                try:
+                    conn.rollback()
+                    c4 = conn.cursor()
+                    c4.execute("SELECT * FROM jogos ORDER BY id DESC LIMIT 5")
+                    j_rows = c4.fetchall()
+                    j_cols = [desc[0] for desc in c4.description]
+                    c4.close()
+                    
+                    for row in j_rows:
+                        ultimos_jogos.append(dict(zip(j_cols, row)))
+                except Exception as e:
+                    conn.rollback()
+                    ultimos_jogos = []
+                
+                pdf.set_font("Helvetica", "", 8)
+                if ultimos_jogos:
+                    for j in ultimos_jogos:
+                        dt_j = str(j.get('data') or "")
+                        adv_j = str(j.get('adversario') or j.get('rival') or "Jogo Oficial")
+                        
+                        gp = int(j.get('placar_uniao') or j.get('gols_pro') or 0)
+                        gc = int(j.get('placar_adv') or j.get('gols_contra') or 0)
+                        
+                        res = str(j.get('resultado') or "")
+                        if not res:
+                            if gp > gc: res = "Vitória"
+                            elif gp == gc: res = "Empate"
+                            else: res = "Derrota"
+                            
+                        placar = f"{gp} x {gc}"
+                        
+                        pdf.cell(25, 5.5, dt_j, 1, 0, "C")
+                        pdf.cell(85, 5.5, adv_j[:45], 1, 0, "L")
+                        pdf.cell(40, 5.5, placar, 1, 0, "C")
+                        pdf.cell(40, 5.5, res, 1, 1, "C")
+                else:
+                    pdf.cell(190, 6, "Nenhuma partida registrada no sistema até o momento.", 1, 1, "C")
+                
                 pdf.ln(4)
+
+                # --- SEÇÃO 3: RELAÇÃO DE MEMBROS ---
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.set_fill_color(245, 245, 245)
+                pdf.set_text_color(0, 0, 128)
+                pdf.cell(190, 6, "  3. RELAÇÃO DE MEMBROS CADASTRADOS", 1, 1, "L", True)
                 
-                pdf.set_font("Helvetica", "B", 11)
-                pdf.cell(0, 7, "3. ULTIMAS PARTIDAS REGISTRADAS", 0, 1)
-                c.execute("SELECT data, adversario, placar_uniao, placar_adv, resultado FROM jogos ORDER BY id DESC LIMIT 5")
-                for jg in c.fetchall():
-                    pdf.set_font("Helvetica", "", 9)
-                    pdf.cell(0, 5, f"- Data: {jg[0]} | Uniao {jg[2]} x {jg[3]} {jg[1]} ({jg[4]})", 0, 1)
-                c.close()
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_fill_color(220, 220, 220)
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(25, 6, "REGISTRO", 1, 0, "C", True)
+                pdf.cell(85, 6, "NOME COMPLETO", 1, 0, "L", True)
+                pdf.cell(40, 6, "STATUS", 1, 0, "C", True)
+                pdf.cell(40, 6, "POSIÇÃO", 1, 1, "C", True)
                 
+                c5 = conn.cursor()
+                c5.execute("SELECT id, nome, status, posicao FROM atletas ORDER BY nome ASC")
+                membros = c5.fetchall()
+                c5.close()
+                
+                pdf.set_font("Helvetica", "", 8)
+                for m in membros:
+                    reg = f"REG-{int(m[0]):04d}" if m[0] else "REG-0000"
+                    nome_m = str(m[1] or "-")
+                    status_m = str(m[2] or "Ativo")
+                    pos = str(m[3] or "N/A")
+                    
+                    if pdf.get_y() > 265:
+                        pdf.add_page(orientation='P')
+                        
+                    pdf.cell(25, 5.5, reg, 1, 0, "C")
+                    pdf.cell(85, 5.5, nome_m[:45], 1, 0, "L")
+                    pdf.cell(40, 5.5, status_m, 1, 0, "C")
+                    pdf.cell(40, 5.5, pos, 1, 1, "C")
+                
+                pdf.ln(4)
+
+                # --- SEÇÃO 4: ÚLTIMAS MOVIMENTAÇÕES FINANCEIRAS ---
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.set_fill_color(245, 245, 245)
+                pdf.set_text_color(0, 0, 128)
+                pdf.cell(190, 6, "  4. ÚLTIMAS MOVIMENTAÇÕES FINANCEIRAS", 1, 1, "L", True)
+                
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_fill_color(220, 220, 220)
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(25, 6, "DATA", 1, 0, "C", True)
+                pdf.cell(35, 6, "CATEGORIA", 1, 0, "C", True)
+                pdf.cell(95, 6, "REFERÊNCIA / OBSERVAÇÃO", 1, 0, "L", True)
+                pdf.cell(35, 6, "VALOR (R$)", 1, 1, "R", True)
+                
+                c6 = conn.cursor()
+                c6.execute("SELECT data, tipo, referencia, valor, observacao FROM financeiro ORDER BY id DESC LIMIT 10")
+                ultimos_fin = c6.fetchall()
+                c6.close()
+                
+                pdf.set_font("Helvetica", "", 7.5)
+                for f in ultimos_fin:
+                    dt_f = str(f[0] or "")
+                    tp_f = str(f[1] or "")
+                    ref_f = str(f[2] or f[4] or "-")
+                    val_f = float(f[3] or 0.0)
+                    
+                    if pdf.get_y() > 265:
+                        pdf.add_page(orientation='P')
+                        
+                    pdf.cell(25, 5, dt_f, 1, 0, "C")
+                    pdf.cell(35, 5, tp_f, 1, 0, "L")
+                    pdf.cell(95, 5, ref_f[:55], 1, 0, "L")
+                    pdf.cell(35, 5, f"R$ {val_f:.2f}", 1, 1, "R")
+
                 pdf_bytes = pdf.output(dest='S').encode('latin1')
-                st.success("PDF Resumo Geral gerado com sucesso!")
+                st.success("Resumo Geral Consolidado gerado com sucesso!")
                 st.download_button(
-                    label="⬇️ Baixar Arquivo PDF Resumo Geral",
+                    label="📥 Baixar Arquivo PDF: Resumo Geral Consolidado",
                     data=pdf_bytes,
-                    file_name="Resumo_Geral_Clube.pdf",
+                    file_name="Resumo_Geral_Consolidado.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
 
-    conn.close()
+conn.close()
