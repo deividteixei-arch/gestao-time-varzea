@@ -139,14 +139,18 @@ if st.session_state.logado:
     else:
         st.session_state.ultima_atividade = datetime.now()
 
-# Se não estiver logado, exibe a tela de Login limpa com o escudo do time
+# --- TELA DE LOGIN ---
 if not st.session_state.logado:
-    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
-    with col_l2:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
         if os.path.exists("meu_time.png"):
-            st.image("meu_time.png", width=120)
-        st.title("⚽ UNIÃO ITAPURA F.C.")
-        st.markdown("### Acesso Restrito ao Sistema")
+            col_img1, col_img2, col_img3 = st.columns([3, 1, 3])
+            with col_img2:
+                st.image("meu_time.png", width=120)
+        
+        st.markdown("<h2 style='text-align: center;'>GESTÃO TIME DE VÁRZEA</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: gray;'>Desenvolvido por DTBRAS Soluções Tecnológicas - CNPJ: 32.608.676/0001-59</p>", unsafe_allow_html=True)
+        st.markdown("---")
         
         with st.form("form_login"):
             usuario_input = st.text_input("Usuário")
@@ -171,40 +175,6 @@ if not st.session_state.logado:
                 else:
                     st.error("Usuário ou senha incorretos.")
                     
-    st.stop()  # Para a execução aqui se não estiver logado
-
-# --- TELA DE LOGIN ---
-if not st.session_state.logado:
-    if os.path.exists("meu_time.png"):
-        st.image("meu_time.png", width=120)
-    
-    st.title("GESTÃO TIME DE VÁRZEA")
-    st.markdown("Desenvolvido por DTBRAS Soluções Tecnológicas - CNPJ: 32.608.676/0001-59")
-    st.markdown("---")
-    
-    with st.form("form_login"):
-        usuario_input = st.text_input("Usuário")
-        senha_input = st.text_input("Senha", type="password")
-        submit_login = st.form_submit_button("Entrar no Sistema", use_container_width=True)
-        
-        if submit_login:
-            conn_l = conectar_banco()
-            c_l = conn_l.cursor()
-            c_l.execute("SELECT senha, perfil FROM usuarios WHERE usuario = %s", (usuario_input,))
-            res = c_l.fetchone()
-            c_l.close()
-            conn_l.close()
-            
-            if res and res[0] == senha_input:
-                st.session_state.logado = True
-                st.session_state.usuario = usuario_input
-                st.session_state.perfil = res[1]
-                st.session_state.ultima_atividade = datetime.now()
-                st.success("Login realizado com sucesso!")
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos.")
-                
     st.stop()  # Para a execução aqui se não estiver logado
 
 # --- CONEXÃO GLOBAL PÓS-LOGIN ---
