@@ -178,7 +178,11 @@ if not st.session_state.logado:
                     try:
                         conn_log = conectar_banco()
                         c_log = conn_log.cursor()
-                        dh_login = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        
+                        # Ajusta para o Horário de Brasília (UTC-3)
+                        fuso_brasilia = datetime.now() - timedelta(hours=3)
+                        dh_login = fuso_brasilia.strftime("%d/%m/%Y %H:%M:%S")
+        
                         c_log.execute("INSERT INTO logs_acessos (usuario, perfil, data_acesso) VALUES (%s, %s, %s)", (usuario_input, res[1], dh_login))
                         conn_log.commit()
                         c_log.close()
