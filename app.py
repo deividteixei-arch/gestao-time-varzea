@@ -852,19 +852,30 @@ elif menu == "👥 Membros":
                 if nome:
                     c = conn.cursor()
                     data_hora_atual = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    
                     if st.session_state.edit_membro_id:
+                        # Se estiver editando, apenas atualiza
                         c.execute("""UPDATE atletas SET nome=%s, documentos=%s, nascimento=%s, posicao=%s, telefone=%s, endereco=%s, status=%s, cargo=%s, nome_mae=%s, foto_path=%s, criado_por=%s, data_registro=%s WHERE id=%s""",
                                   (nome, docs, nasc, posicao, tel, endereco, status, cargo, nome_mae, foto_path, st.session_state.usuario, data_hora_atual, st.session_state.edit_membro_id))
                         st.success(f"Membro atualizado com sucesso por {st.session_state.usuario}!")
                     else:
-                        c.execute("""INSERT INTO atletas (nome, documentos, nascimento, posicao, telefone, endereco, status, cargo, nome_mae, foto_path, criado_por, data_registro) 
-                                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", 
-                                  (nome, docs, nasc, posicao, tel, endereco, status, cargo, nome_mae, foto_path, st.session_state.usuario, data_hora_atual))
-                        st.success(f"Membro cadastrado com sucesso por {st.session_state.usuario}!")
+                        # Se for novo cadastro, verifica se já existe um atleta com o mesmo nome exato
+                        c.execute("SELECT COUNT(*) FROM atletas WHERE LOWER(TRIM(nome)) = LOWER(TRIM(%s))", (nome,))
+                        existe = c.fetchone()[0]
+                        
+                        if existe > 0:
+                            st.error(f"⚠️ Atenção: Já existe um membro cadastrado com o nome '{nome}'!")
+                        else:
+                            c.execute("""INSERT INTO atletas (nome, documentos, nascimento, posicao, telefone, endereco, status, cargo, nome_mae, foto_path, criado_por, data_registro) 
+                                         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", 
+                                      (nome, docs, nasc, posicao, tel, endereco, status, cargo, nome_mae, foto_path, st.session_state.usuario, data_hora_atual))
+                            st.success(f"Membro cadastrado com sucesso por {st.session_state.usuario}!")
+                    
                     conn.commit()
                     c.close()
-                    st.session_state.edit_membro_id = None
-                    st.rerun()
+                    if not (not st.session_state.edit_membro_id and existe > 0):
+                        st.session_state.edit_membro_id = None
+                        st.rerun()
                 else:
                     st.warning("O nome é obrigatório.")
 
