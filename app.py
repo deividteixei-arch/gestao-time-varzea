@@ -923,14 +923,17 @@ elif menu == "💰 Financeiro":
                     fin_atual = {"data": res_f[0], "valor": res_f[1], "tipo": res_f[2], "observacao": res_f[3], "atleta_id": res_f[4], "referencia": res_f[5] or datetime.now().strftime("%m/%Y")}
                     st.info(f"Editando Lançamento ID: {st.session_state.edit_fin_id}")
 
-            with st.form("form_fin"):
-                c1, c2, c3 = st.columns(3)
+            # Categoria em largura total na própria linha (fora do form)
+            categorias_f = ["Mensalidade", "Jogos", "Avulso", "Patrocínio", "Diretoria", "Verba", "Doação", "Manutenção", "Água", "Juiz/Troféu", "Outros"]
+            idx_tipo = categorias_f.index(fin_atual["tipo"]) if fin_atual["tipo"] in categorias_f else 0
+            
+            f_tipo = st.selectbox("Categoria do Lançamento", categorias_f, index=idx_tipo, key="select_cat_fin")
+
+            with st.form("form_financeiro_oficial"):
+                # Data e Valor dividindo o espaço perfeitamente lado a lado
+                c1, c2 = st.columns(2)
                 f_data = c1.text_input("Data do Lançamento", value=fin_atual["data"])
                 f_valor = c2.number_input("Valor (R$)", value=float(fin_atual["valor"]), format="%.2f")
-                
-                categorias_f = ["Mensalidade", "Jogos", "Avulso", "Patrocínio", "Diretoria", "Verba", "Doação", "Manutenção", "Água", "Juiz/Troféu", "Outros"]
-                idx_tipo = categorias_f.index(fin_atual["tipo"]) if fin_atual["tipo"] in categorias_f else 0
-                f_tipo = c3.selectbox("Categoria", categorias_f, index=idx_tipo)
                 
                 atleta_id_escolhido = None
                 f_ref = datetime.now().strftime("%m/%Y")
@@ -1022,23 +1025,59 @@ elif menu == "💰 Financeiro":
                 st.dataframe(df_cal, use_container_width=True, hide_index=True)
                 
                 if st.button("📥 Gerar Relatório em PDF do Calendário de Mensalidades", use_container_width=True):
-                    pdf = PDFRelatorio(f"CALENDARIO DE MENSALIDADES - {mes_ref_cal}")
-                    pdf.add_page()
+                    data_hora_impressao = datetime.now().strftime("%d/%m/%Y - %H:%Mh")
+                    usuario_impressor = st.session_state.usuario
                     
-                    pdf.set_font("Helvetica", "B", 10)
-                    pdf.cell(0, 8, f"Resumo Financeiro - Mes: {mes_ref_cal}", 0, 1)
-                    pdf.set_font("Helvetica", "", 10)
-                    pdf.cell(0, 6, f"Valor Total Arrecadado: R$ {total_arrecadado:.2f}", 0, 1)
-                    pdf.cell(0, 6, f"Valor Total Inadimplente: R$ {total_pendente:.2f}", 0, 1)
+                    pdf = PDFRelatorio(f"CALENDARIO DE MENSALIDADES - {mes_ref_cal}")
+                    pdf.add_page(orientation='P') # Retrato
+                    
+                    # Cabeçalho de controle de impressão
+                    pdf.set_font("Helvetica", "B", 8)
+                    pdf.set_text_color(50, 50, 50)
+                    pdf.cell(0, 5, f"IMPRESSÃO: {data_hora_impressao} - {usuario_impressor}", 0, 1, "R")
+                    pdf.ln(2)
+                    
+                    # Resumo Financeiro Cards / Métricas no PDF
+                    pdf.set_font("Helvetica", "B", 9)
+                    pdf.set_fill_color(245, 245, 245)
+                    pdf.set_text_color(0, 0, 128)
+                    pdf.cell(190, 6, f"  RESUMO FINANCEIRO - REFERENCIA: {mes_ref_cal}", 1, 1, "L", True)
+                    
+                    pdf.set_font("Helvetica", "", 8)
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.cell(95, 6, f"   Total Arrecadado: R$ {total_arrecadado:.2f}", "LR", 0, "L")
+                    pdf.cell(95, 6, f"   Total Inadimplente: R$ {total_pendente:.2f}", "R", 1, "L")
+                    pdf.cell(190, 6, f"   Total de Atletas Ativos: {len(atletas_ativos)}", "LBR", 1, "L")
                     pdf.ln(5)
                     
-                    pdf.set_font("Helvetica", "B", 10)
-                    pdf.cell(0, 8, "Detalhamento por Atleta", 0, 1)
+                    # Cabeçalho da Tabela Padronizada
+                    pdf.set_font("Helvetica", "B", 8)
+                    pdf.set_fill_color(220, 220, 220)
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.cell(90, 6, "ATLETA", 1, 0, "L", True)
+                    pdf.cell(35, 6, "STATUS", 1, 0, "C", True)
+                    pdf.cell(35, 6, "VALOR PAGO", 1, 0, "R", True)
+                    pdf.cell(30, 6, "PENDENTE", 1, 1, "R", True)
                     
+                    # Linhas da Tabela por Atleta
+                    pdf.set_font("Helvetica", "", 8)
                     for item in dados_calendario:
                         status_texto = "PAGO" if "Pago" in item['Status'] else "INADIMPLENTE"
-                        pdf.set_font("Helvetica", "", 9)
-                        pdf.cell(0, 6, f"- {item['Atleta']} | Status: {status_texto} | Pago: {item['Valor Pago (R$)']} | Pendente: {item['Falta Pagar (R$)']}", 0, 1)
+                        
+                        if pdf.get_y() > 265:
+                            pdf.add_page(orientation='P')
+                            pdf.set_font("Helvetica", "B", 8)
+                            pdf.set_fill_color(220, 220, 220)
+                            pdf.cell(90, 6, "ATLETA", 1, 0, "L", True)
+                            pdf.cell(35, 6, "STATUS", 1, 0, "C", True)
+                            pdf.cell(35, 6, "VALOR PAGO", 1, 0, "R", True)
+                            pdf.cell(30, 6, "PENDENTE", 1, 1, "R", True)
+                            pdf.set_font("Helvetica", "", 8)
+                        
+                        pdf.cell(90, 5.5, str(item['Atleta']), 1, 0, "L")
+                        pdf.cell(35, 5.5, status_texto, 1, 0, "C")
+                        pdf.cell(35, 5.5, str(item['Valor Pago (R$)']), 1, 0, "R")
+                        pdf.cell(30, 5.5, str(item['Falta Pagar (R$)']), 1, 1, "R")
                     
                     pdf_bytes = pdf.output(dest='S').encode('latin1')
                     st.success("PDF do Calendário de Mensalidades gerado com sucesso!")
