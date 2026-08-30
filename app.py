@@ -622,6 +622,13 @@ if menu == "⚙️ Painel Admin":
                     use_container_width=True
                 )
 
+            # <--- COLE AQUI EMBAIXO:
+            st.divider()
+            st.subheader("🔒 Extrato de Auditoria de Acessos ao Sistema")
+            st.write("Registro de quem entrou no sistema, perfil e data/hora exata:")
+            df_logs = pd.read_sql("SELECT id, usuario, perfil, data_acesso FROM logs_acessos ORDER BY id DESC", conn)
+            st.dataframe(df_logs, use_container_width=True, hide_index=True)
+
     # ==========================================
     # 📊 DASHBOARD
     # ==========================================
