@@ -158,9 +158,12 @@ if not st.session_state.logado:
             submit_login = st.form_submit_button("Entrar no Sistema", use_container_width=True)
             
             if submit_login:
+                # Padroniza para maiúsculo e remove espaços extras digitados pelo celular
+                usuario_limpo = usuario_input.strip().upper()
+                
                 conn_l = conectar_banco()
                 c_l = conn_l.cursor()
-                c_l.execute("SELECT senha, perfil FROM usuarios WHERE usuario = %s", (usuario_input,))
+                c_l.execute("SELECT senha, perfil FROM usuarios WHERE UPPER(usuario) = %s", (usuario_limpo,))
                 res = c_l.fetchone()
                 c_l.close()
                 conn_l.close()
