@@ -176,13 +176,15 @@ if not st.session_state.logado:
                     
                     # Registra o acesso no banco de dados para auditoria
                     try:
-                        c_log = conn_l.cursor()
+                        conn_log = conectar_banco()
+                        c_log = conn_log.cursor()
                         dh_login = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         c_log.execute("INSERT INTO logs_acessos (usuario, perfil, data_acesso) VALUES (%s, %s, %s)", (usuario_input, res[1], dh_login))
-                        conn_l.commit()
+                        conn_log.commit()
                         c_log.close()
-                    except:
-                        pass
+                        conn_log.close()
+                    except Exception as e:
+                        print(f"Erro ao salvar log: {e}")
 
                     st.success("Login realizado com sucesso!")
                     st.rerun()
