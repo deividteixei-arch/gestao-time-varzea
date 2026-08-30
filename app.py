@@ -193,12 +193,21 @@ with st.sidebar:
     
     st.markdown("<h4 style='text-align: center; margin-bottom: 0px;'>GESTÃO TIME DE VÁRZEA</h4>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 10px; color: gray;'>DTBRAS Soluções Tecnológicas<br>CNPJ: 32.608.676/0001-59</p>", unsafe_allow_html=True)
+    
+    # Mensagem de boas-vindas com o usuário logado e o slogan do time
+    st.markdown("---")
+    st.markdown(f"<p style='text-align: center; font-size: 12px; margin-bottom: 5px;'>👤 Olá, <b>{st.session_state.usuario}</b></p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 11px; color: #3399ff; font-style: italic; line-height: 1.2;'>“União Itapura, nossa casa. União, nossa força. Vitória é o nosso objetivo.”</p>", unsafe_allow_html=True)
+    
     st.divider()
 
-    menu = st.radio(
-        "Navegação Principal",
-        ["📊 Dashboard", "👥 Membros", "💰 Financeiro", "⚽ Jogos", "🏆 Scout", "📄 Relatórios PDF", "⚙️ Painel Admin"]
-    )
+    # Define as opções de menu de forma dinâmica com base no perfil do usuário
+    opcoes_menu = ["📊 Dashboard", "👥 Membros", "💰 Financeiro", "⚽ Jogos", "🏆 Scout", "📄 Relatórios PDF"]
+    
+    if st.session_state.perfil == "Admin":
+        opcoes_menu.append("⚙️ Painel Admin")
+
+    menu = st.radio("Navegação Principal", opcoes_menu)
 
     st.divider()
 
