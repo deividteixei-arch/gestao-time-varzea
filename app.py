@@ -27,12 +27,12 @@ def iniciar_banco():
     conn = conectar_banco()
     cursor = conn.cursor()
     
-    # Tabela de Usuários
-    cursor.execute('''CREATE TABLE IF NOT EXISTS usuarios (
+    # Tabela de Histórico de Acessos (Auditoria de Login)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS logs_acessos (
         id SERIAL PRIMARY KEY, 
-        usuario TEXT UNIQUE, 
-        senha TEXT, 
-        perfil TEXT)''')
+        usuario TEXT, 
+        perfil TEXT, 
+        data_acesso TEXT)''')
     
     cursor.execute("SELECT COUNT(*) FROM usuarios")
     if cursor.fetchone()[0] == 0:
@@ -173,6 +173,17 @@ if not st.session_state.logado:
                     st.session_state.usuario = usuario_input
                     st.session_state.perfil = res[1]
                     st.session_state.ultima_atividade = datetime.now()
+                    
+                    # Registra o acesso no banco de dados para auditoria
+                    try:
+                        c_log = conn_l.cursor()
+                        dh_login = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                        c_log.execute("INSERT INTO logs_acessos (usuario, perfil, data_acesso) VALUES (%s, %s, %s)", (usuario_input, res[1], dh_login))
+                        conn_l.commit()
+                        c_log.close()
+                    except:
+                        pass
+
                     st.success("Login realizado com sucesso!")
                     st.rerun()
                 else:
