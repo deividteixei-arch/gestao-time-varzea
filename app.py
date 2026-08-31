@@ -1207,7 +1207,7 @@ elif menu == "⚽ Jogos":
             j_obs = st.text_area("Observações da Partida", value=jogo_atual["obs"])
             
             st.subheader("📋 Súmula: Marque os atletas presentes nesta partida")
-            atletas_ativos = pd.read_sql("SELECT id, nome, posicao FROM atletas WHERE status='Ativo'", conn)
+            atletas_ativos = pd.read_sql("SELECT id, nome, posicao FROM atletas WHERE status='Ativo' ORDER BY nome ASC", conn)
             
             presencas_salvas = []
             if st.session_state.edit_jogo_id:
