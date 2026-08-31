@@ -857,28 +857,31 @@ elif menu == "👥 Membros":
                 membro_atual = {"nome": res_m[0], "documentos": res_m[1], "nascimento": res_m[2], "posicao": res_m[3], "telefone": res_m[4], "endereco": res_m[5], "status": res_m[6], "cargo": res_m[7], "nome_mae": res_m[8], "foto_path": res_m[9]}
                 st.info(f"Editando o membro: **{res_m[0]}** (ID: {st.session_state.edit_membro_id})")
 
+        # Define um ID único para a sessão do membro atual (0 se for novo cadastro)
+        id_membro_atual = st.session_state.edit_membro_id if st.session_state.edit_membro_id else 0
+
         with st.form("form_membro"):
             col1, col2 = st.columns(2)
             with col1:
-                nome = st.text_input("Nome Completo", value=membro_atual["nome"])
-                docs = st.text_input("Documentos (RG/CPF)", value=membro_atual["documentos"])
-                nasc = st.text_input("Nascimento (DD/MM/AAAA)", value=membro_atual["nascimento"])
-                nome_mae = st.text_input("Nome da Mãe", value=membro_atual["nome_mae"])
-                tel = st.text_input("Telefone / WhatsApp", value=membro_atual["telefone"])
+                nome = st.text_input("Nome Completo", value=membro_atual["nome"], key=f"m_nome_{id_membro_atual}")
+                docs = st.text_input("Documentos (RG/CPF)", value=membro_atual["documentos"], key=f"m_docs_{id_membro_atual}")
+                nasc = st.text_input("Nascimento (DD/MM/AAAA)", value=membro_atual["nascimento"], key=f"m_nasc_{id_membro_atual}")
+                nome_mae = st.text_input("Nome da Mãe", value=membro_atual["nome_mae"], key=f"m_mae_{id_membro_atual}")
+                tel = st.text_input("Telefone / WhatsApp", value=membro_atual["telefone"], key=f"m_tel_{id_membro_atual}")
             with col2:
-                endereco = st.text_input("Endereço", value=membro_atual["endereco"])
+                endereco = st.text_input("Endereço", value=membro_atual["endereco"], key=f"m_end_{id_membro_atual}")
                 cargos_lista = ["Jogador", "Diretor", "Técnico", "Colaborador", "Assistente", "Marketing", "Ajudante", "Outros"]
                 idx_cargo = cargos_lista.index(membro_atual["cargo"]) if membro_atual["cargo"] in cargos_lista else 0
-                cargo = st.selectbox("Cargo", cargos_lista, index=idx_cargo)
+                cargo = st.selectbox("Cargo", cargos_lista, index=idx_cargo, key=f"m_cargo_{id_membro_atual}")
                 
                 pos_lista = ["Goleiro", "Zagueiro", "Lateral", "Volante", "Meia", "Atacante", "N/A"]
                 idx_pos = pos_lista.index(membro_atual["posicao"]) if membro_atual["posicao"] in pos_lista else 0
-                posicao = st.selectbox("Posição em Campo", pos_lista, index=idx_pos)
+                posicao = st.selectbox("Posição em Campo", pos_lista, index=idx_pos, key=f"m_pos_{id_membro_atual}")
                 
                 status_lista = ["Ativo", "Inativo"]
                 idx_status = status_lista.index(membro_atual["status"]) if membro_atual["status"] in status_lista else 0
-                status = st.selectbox("Status", status_lista, index=idx_status)
-                foto_path = st.text_input("Caminho ou URL da Foto 3x4 (Opcional)", value=membro_atual["foto_path"])
+                status = st.selectbox("Status", status_lista, index=idx_status, key=f"m_status_{id_membro_atual}")
+                foto_path = st.text_input("Caminho ou URL da Foto 3x4 (Opcional)", value=membro_atual["foto_path"], key=f"m_foto_{id_membro_atual}")
             
             btn_salvar_membro = st.form_submit_button("💾 Salvar / Atualizar Membro", use_container_width=True)
             if btn_salvar_membro:
@@ -933,20 +936,20 @@ elif menu == "💰 Financeiro":
 
             df_fin_all = pd.read_sql("SELECT id, tipo, valor, data, observacao FROM financeiro ORDER BY id DESC", conn)
             with st.expander("🔍 Pesquisar / Gerenciar Lançamentos", expanded=True):
-                termo_f = st.text_input("Pesquisar no extrato (por tipo ou observação):")
+                termo_f = st.text_input("Pesquisar no extrato (por tipo ou observação):", key="termo_pesquisa_financeiro")
                 if not df_fin_all.empty:
                     lista_opcoes_fin = {f"ID {row['id']} - {row['tipo']} | R$ {row['valor']} ({row['data']})": row['id'] for _, row in df_fin_all.iterrows()}
-                    fin_selecionado_str = st.selectbox("Selecione um lançamento:", ["-- Novo Lançamento --"] + list(lista_opcoes_fin.keys()))
+                    fin_selecionado_str = st.selectbox("Selecione um lançamento:", ["-- Novo Lançamento --"] + list(lista_opcoes_fin.keys()), key="select_lancamento_financeiro")
                     
                     col_f1, col_f2, col_f3 = st.columns(3)
-                    if col_f1.button("✏️ Carregar Lançamento p/ Editar"):
+                    if col_f1.button("✏️ Carregar Lançamento p/ Editar", key="btn_carregar_fin"):
                         if fin_selecionado_str != "-- Novo Lançamento --":
                             st.session_state.edit_fin_id = lista_opcoes_fin[fin_selecionado_str]
                             st.rerun()
-                    if col_f2.button("🧹 Limpar Seleção"):
+                    if col_f2.button("🧹 Limpar Seleção", key="btn_limpar_fin"):
                         st.session_state.edit_fin_id = None
                         st.rerun()
-                    if col_f3.button("🗑️ Excluir Lançamento"):
+                    if col_f3.button("🗑️ Excluir Lançamento", key="btn_excluir_fin"):
                         if fin_selecionado_str != "-- Novo Lançamento --":
                             id_f_exc = lista_opcoes_fin[fin_selecionado_str]
                             c = conn.cursor()
@@ -967,17 +970,17 @@ elif menu == "💰 Financeiro":
                     fin_atual = {"data": res_f[0], "valor": res_f[1], "tipo": res_f[2], "observacao": res_f[3], "atleta_id": res_f[4], "referencia": res_f[5] or datetime.now().strftime("%m/%Y")}
                     st.info(f"Editando Lançamento ID: {st.session_state.edit_fin_id}")
 
-            # Categoria em largura total na própria linha (fora do form)
+            id_fin_atual = st.session_state.edit_fin_id if st.session_state.edit_fin_id else 0
+
             categorias_f = ["Mensalidade", "Jogos", "Avulso", "Patrocínio", "Diretoria", "Verba", "Doação", "Manutenção", "Água", "Juiz/Troféu", "Outros"]
             idx_tipo = categorias_f.index(fin_atual["tipo"]) if fin_atual["tipo"] in categorias_f else 0
             
-            f_tipo = st.selectbox("Categoria do Lançamento", categorias_f, index=idx_tipo, key="select_cat_fin")
+            f_tipo = st.selectbox("Categoria do Lançamento", categorias_f, index=idx_tipo, key=f"f_tipo_{id_fin_atual}")
 
             with st.form("form_financeiro_oficial"):
-                # Data e Valor dividindo o espaço perfeitamente lado a lado
                 c1, c2 = st.columns(2)
-                f_data = c1.text_input("Data do Lançamento", value=fin_atual["data"])
-                f_valor = c2.number_input("Valor (R$)", value=float(fin_atual["valor"]), format="%.2f")
+                f_data = c1.text_input("Data do Lançamento", value=fin_atual["data"], key=f"f_data_{id_fin_atual}")
+                f_valor = c2.number_input("Valor (R$)", value=float(fin_atual["valor"]), format="%.2f", key=f"f_valor_{id_fin_atual}")
                 
                 atleta_id_escolhido = None
                 f_ref = datetime.now().strftime("%m/%Y")
@@ -988,11 +991,11 @@ elif menu == "💰 Financeiro":
                     df_atl_box = pd.read_sql("SELECT id, nome FROM atletas WHERE status='Ativo' ORDER BY nome ASC", conn)
                     if not df_atl_box.empty:
                         dict_atl = {row['nome']: row['id'] for _, row in df_atl_box.iterrows()}
-                        atl_escolhido_nome = st.selectbox("Selecione o Atleta Pagante", list(dict_atl.keys()))
+                        atl_escolhido_nome = st.selectbox("Selecione o Atleta Pagante", list(dict_atl.keys()), key=f"f_atl_{id_fin_atual}")
                         atleta_id_escolhido = dict_atl[atl_escolhido_nome]
-                        f_ref = st.text_input("Mês de Referência (Ex: 08/2026)", value=fin_atual["referencia"])
+                        f_ref = st.text_input("Mês de Referência (Ex: 08/2026)", value=fin_atual["referencia"], key=f"f_ref_{id_fin_atual}")
 
-                f_obs = st.text_area("Observação", value=fin_atual["observacao"])
+                f_obs = st.text_area("Observação", value=fin_atual["observacao"], key=f"f_obs_{id_fin_atual}")
                 
                 if st.form_submit_button("💾 Salvar / Atualizar Lançamento", use_container_width=True):
                     c = conn.cursor()
@@ -1217,9 +1220,16 @@ elif menu == "⚽ Jogos":
                 c.close()
 
             presencas_checks = {}
+            # Define um prefixo único para a sessão do jogo atual (0 se for novo jogo)
+            id_jogo_atual = st.session_state.edit_jogo_id if st.session_state.edit_jogo_id else 0
             for _, r in atletas_ativos.iterrows():
                 ja_presente = r['id'] in presencas_salvas
-                presencas_checks[r['id']] = st.checkbox(f"{r['nome']} ({r['posicao']})", value=ja_presente)
+                # A 'key' única força o Streamlit a resetar o estado ao trocar de partida
+                presencas_checks[r['id']] = st.checkbox(
+                    f"{r['nome']} ({r['posicao']})", 
+                    value=ja_presente, 
+                    key=f"check_atleta_{id_jogo_atual}_{r['id']}"
+                )
             
             btn_salvar_partida = st.form_submit_button("💾 Salvar / Atualizar Partida e Súmula", use_container_width=True)
             
