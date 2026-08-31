@@ -591,7 +591,7 @@ if menu == "⚙️ Painel Admin":
             col_b1, col_b2 = st.columns(2)
             
             with col_b1:
-                df_b_atletas = pd.read_sql("SELECT * FROM atletas", conn)
+                df_atletas = pd.read_sql("SELECT * FROM atletas ORDER BY nome ASC", conn)
                 st.download_button(
                     label="📥 Baixar Backup de Membros (CSV)",
                     data=df_b_atletas.to_csv(index=False).encode('utf-8'),
