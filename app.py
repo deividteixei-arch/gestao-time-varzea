@@ -1146,20 +1146,20 @@ elif menu == "⚽ Jogos":
 
         df_jogos_all = pd.read_sql("SELECT id, adversario, data FROM jogos ORDER BY id DESC", conn)
         with st.expander("🔍 Pesquisar / Gerenciar Partidas", expanded=True):
-            termo_j = st.text_input("Pesquisar partida por adversário:")
+            termo_j = st.text_input("Pesquisar partida por adversário:", key="termo_pesquisa_jogos")
             if not df_jogos_all.empty:
                 lista_opcoes_jogos = {f"ID {row['id']} - vs {row['adversario']} ({row['data']})": row['id'] for _, row in df_jogos_all.iterrows()}
-                jogo_selecionado_str = st.selectbox("Selecione a partida:", ["-- Nova Partida --"] + list(lista_opcoes_jogos.keys()))
+                jogo_selecionado_str = st.selectbox("Selecione a partida:", ["-- Nova Partida --"] + list(lista_opcoes_jogos.keys()), key="select_partida_jogos")
                 
                 col_j1, col_j2, col_j3 = st.columns(3)
-                if col_j1.button("✏️ Carregar Partida p/ Editar"):
+                if col_j1.button("✏️ Carregar Partida p/ Editar", key="btn_carregar_jogo"):
                     if jogo_selecionado_str != "-- Nova Partida --":
                         st.session_state.edit_jogo_id = lista_opcoes_jogos[jogo_selecionado_str]
                         st.rerun()
-                if col_j2.button("🧹 Limpar Seleção"):
+                if col_j2.button("🧹 Limpar Seleção", key="btn_limpar_jogo"):
                     st.session_state.edit_jogo_id = None
                     st.rerun()
-                if col_j3.button("🗑️ Excluir Partida"):
+                if col_j3.button("🗑️ Excluir Partida", key="btn_excluir_jogo"):
                     if jogo_selecionado_str != "-- Nova Partida --":
                         id_j_exc = lista_opcoes_jogos[jogo_selecionado_str]
                         c = conn.cursor()
@@ -1171,7 +1171,13 @@ elif menu == "⚽ Jogos":
                         st.success("Partida excluída!")
                         st.rerun()
 
+        id_j_atual = st.session_state.edit_jogo_id if st.session_state.edit_jogo_id else 0
+
         jogo_atual = {"data": datetime.now().strftime("%d/%m/%Y"), "adversario": "", "local": "Mandante", "p_u": 0, "p_a": 0, "pen": "", "obs": ""}
+        pen_u_salvo = 0
+        pen_a_salvo = 0
+        teve_pen_salvo = "Não"
+
         if st.session_state.edit_jogo_id:
             c = conn.cursor()
             c.execute("SELECT data, adversario, local, placar_uniao, placar_adv, penaltis, observacao FROM jogos WHERE id = %s", (st.session_state.edit_jogo_id,))
@@ -1180,34 +1186,50 @@ elif menu == "⚽ Jogos":
             if res_j:
                 jogo_atual = {"data": res_j[0], "adversario": res_j[1], "local": res_j[2], "p_u": res_j[3], "p_a": res_j[4], "pen": res_j[5] or "", "obs": res_j[6] or ""}
                 st.info(f"Editando Partida ID: {st.session_state.edit_jogo_id} vs {res_j[1]}")
+                
+                if jogo_atual["pen"] and " x " in jogo_atual["pen"]:
+                    teve_pen_salvo = "Sim"
+                    try:
+                        partes_pen = jogo_atual["pen"].replace("União ", "").replace(" Adversário", "").split(" x ")
+                        pen_u_salvo = int(partes_pen[0])
+                        pen_a_salvo = int(partes_pen[1])
+                    except:
+                        pass
 
         c1, c2, c3 = st.columns(3)
-        j_data = c1.text_input("Data do Jogo", value=jogo_atual["data"])
-        j_adv = c2.text_input("Nome do Adversário", value=jogo_atual["adversario"])
+        j_data = c1.text_input("Data do Jogo", value=jogo_atual["data"], key=f"j_data_{id_j_atual}")
+        j_adv = c2.text_input("Nome do Adversário", value=jogo_atual["adversario"], key=f"j_adv_{id_j_atual}")
         loc_lista = ["Mandante", "Visitante"]
         idx_loc = loc_lista.index(jogo_atual["local"]) if jogo_atual["local"] in loc_lista else 0
-        j_loc = c3.selectbox("Local / Mando", loc_lista, index=idx_loc)
+        j_loc = c3.selectbox("Local / Mando", loc_lista, index=idx_loc, key=f"j_loc_{id_j_atual}")
         
         st.markdown("---")
         st.markdown("⚽ **Placar do Tempo Normal (90 minutos)**")
         sc1, sc2 = st.columns(2)
-        j_gols_uniao = sc1.number_input("Gols do União Itapura", min_value=0, step=1, value=int(jogo_atual["p_u"]))
-        j_gols_adv = sc2.number_input("Gols do Adversário", min_value=0, step=1, value=int(jogo_atual["p_a"]))
+        j_gols_uniao = sc1.number_input("Gols do União Itapura", min_value=0, step=1, value=int(jogo_atual["p_u"]), key=f"j_gu_{id_j_atual}")
+        j_gols_adv = sc2.number_input("Gols do Adversário", min_value=0, step=1, value=int(jogo_atual["p_a"]), key=f"j_ga_{id_j_atual}")
         
-        j_penaltis = ""
+        pen_uniao = pen_u_salvo
+        pen_adv = pen_a_salvo
+        teve_penaltis = teve_pen_salvo
+        j_penaltis = jogo_atual["pen"]
+
         if j_gols_uniao == j_gols_adv:
             st.markdown("⚠️ *O jogo terminou empatado no tempo normal.*")
-            teve_penaltis = st.selectbox("Houve disputa de pênaltis?", ["Não", "Sim"], index=0 if not jogo_atual["pen"] else 1)
+            idx_pen_default = 0 if teve_pen_salvo == "Não" else 1
+            teve_penaltis = st.selectbox("Houve disputa de pênaltis?", ["Não", "Sim"], index=idx_pen_default, key=f"j_teve_pen_{id_j_atual}")
             
             if teve_penaltis == "Sim":
                 st.markdown("🥅 **Placar da Disputa de Pênaltis**")
                 pc1, pc2 = st.columns(2)
-                pen_uniao = pc1.number_input("Pênaltis União Itapura", min_value=0, step=1, value=0)
-                pen_adv = pc2.number_input("Pênaltis Adversário", min_value=0, step=1, value=0)
+                pen_uniao = pc1.number_input("Pênaltis União Itapura", min_value=0, step=1, value=pen_u_salvo, key=f"j_pu_{id_j_atual}")
+                pen_adv = pc2.number_input("Pênaltis Adversário", min_value=0, step=1, value=pen_a_salvo, key=f"j_pa_{id_j_atual}")
                 j_penaltis = f"União {pen_uniao} x {pen_adv} Adversário"
+            else:
+                j_penaltis = ""
 
         with st.form("form_jogos_sufixo"):
-            j_obs = st.text_area("Observações da Partida", value=jogo_atual["obs"])
+            j_obs = st.text_area("Observações da Partida", value=jogo_atual["obs"], key=f"j_obs_{id_j_atual}")
             
             st.subheader("📋 Súmula: Marque os atletas presentes nesta partida")
             atletas_ativos = pd.read_sql("SELECT id, nome, posicao FROM atletas WHERE status='Ativo' ORDER BY nome ASC", conn)
@@ -1220,40 +1242,59 @@ elif menu == "⚽ Jogos":
                 c.close()
 
             presencas_checks = {}
-            # Define um prefixo único para a sessão do jogo atual (0 se for novo jogo)
-            id_jogo_atual = st.session_state.edit_jogo_id if st.session_state.edit_jogo_id else 0
             for _, r in atletas_ativos.iterrows():
                 ja_presente = r['id'] in presencas_salvas
-                # A 'key' única força o Streamlit a resetar o estado ao trocar de partida
                 presencas_checks[r['id']] = st.checkbox(
                     f"{r['nome']} ({r['posicao']})", 
                     value=ja_presente, 
-                    key=f"check_atleta_{id_jogo_atual}_{r['id']}"
+                    key=f"check_atleta_{id_j_atual}_{r['id']}"
                 )
             
             btn_salvar_partida = st.form_submit_button("💾 Salvar / Atualizar Partida e Súmula", use_container_width=True)
             
             if btn_salvar_partida:
                 if j_adv:
-                    if j_gols_uniao > j_gols_adv:
-                        res = "Vitória"
-                    elif j_gols_uniao < j_gols_adv:
-                        res = "Derrota"
-                    else:
-                        res = "Empate"
+                    # Pega os valores direto das chaves ativas na tela do formulário
+                    gols_u_form = j_gols_uniao
+                    gols_a_form = j_gols_adv
                     
+                    # Verifica se teve pênaltis pelos widgets da tela
+                    pen_texto_final = ""
+                    res_calculado = "Empate"
+                    
+                    if gols_u_form > gols_a_form:
+                        res_calculado = "Vitória"
+                    elif gols_u_form < gols_a_form:
+                        res_calculado = "Derrota"
+                    else:
+                        # Empate no tempo normal: checa se os inputs de pênaltis existem e calcula
+                        pu_val = locals().get('pen_uniao', pen_u_salvo)
+                        pa_val = locals().get('pen_adv', pen_a_salvo)
+                        
+                        if 'teve_penaltis' in locals() and teve_penaltis == "Sim":
+                            pen_texto_final = f"União {pu_val} x {pa_val} Adversário"
+                            if pu_val > pa_val:
+                                res_calculado = "Vitória"
+                            elif pu_val < pa_val:
+                                res_calculado = "Derrota"
+                            else:
+                                res_calculado = "Empate"
+                        else:
+                            res_calculado = "Empate"
+
                     c = conn.cursor()
                     dh_atual = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    
                     if st.session_state.edit_jogo_id:
                         jid = st.session_state.edit_jogo_id
                         c.execute("""UPDATE jogos SET adversario=%s, placar_uniao=%s, placar_adv=%s, data=%s, local=%s, penaltis=%s, observacao=%s, resultado=%s, criado_por=%s, data_registro=%s WHERE id=%s""", 
-                                  (j_adv, j_gols_uniao, j_gols_adv, j_data, j_loc, j_penaltis, j_obs, res, st.session_state.usuario, dh_atual, jid))
+                                  (j_adv, gols_u_form, gols_a_form, j_data, j_loc, pen_texto_final, j_obs, res_calculado, st.session_state.usuario, dh_atual, jid))
                         c.execute("DELETE FROM presencas WHERE jogo_id = %s", (jid,))
                         st.success(f"Partida atualizada por {st.session_state.usuario}!")
                     else:
                         c.execute("""INSERT INTO jogos (adversario, placar_uniao, placar_adv, data, local, penaltis, observacao, resultado, criado_por, data_registro) 
                                      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""", 
-                                  (j_adv, j_gols_uniao, j_gols_adv, j_data, j_loc, j_penaltis, j_obs, res, st.session_state.usuario, dh_atual))
+                                  (j_adv, gols_u_form, gols_a_form, j_data, j_loc, pen_texto_final, j_obs, res_calculado, st.session_state.usuario, dh_atual))
                         jid = c.fetchone()[0]
                         st.success(f"Partida gravada por {st.session_state.usuario}!")
                     
