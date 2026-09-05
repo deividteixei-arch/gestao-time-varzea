@@ -27,17 +27,16 @@ def iniciar_banco():
     conn = conectar_banco()
     cursor = conn.cursor()
     
-    # Tabela de Histórico de Acessos (Auditoria de Login)
-    cursor.execute('''CREATE TABLE IF NOT EXISTS logs_acessos (
+   # Tabela de Valores de Mensalidade por Cargo
+    cursor.execute('''CREATE TABLE IF NOT EXISTS cargos_valores (
         id SERIAL PRIMARY KEY, 
-        usuario TEXT, 
-        perfil TEXT, 
-        data_acesso TEXT)''')
+        cargo TEXT UNIQUE, 
+        valor REAL)''')
     
-    cursor.execute("SELECT COUNT(*) FROM usuarios")
+    cursor.execute("SELECT COUNT(*) FROM cargos_valores")
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO usuarios (usuario, senha, perfil) VALUES (%s, %s, %s)", ("admin", "admin123", "Admin"))
-        cursor.execute("INSERT INTO usuarios (usuario, senha, perfil) VALUES (%s, %s, %s)", ("diretor", "diretor123", "Diretor"))
+        cargos_padrao = [("Jogador", 40.0), ("Diretor", 50.0), ("Goleiro", 0.0), ("Técnico", 50.0), ("Colaborador", 0.0), ("Assistente", 0.0), ("Marketing", 0.0), ("Ajudante", 0.0), ("Outros", 0.0)]
+        cursor.executemany("INSERT INTO cargos_valores (cargo, valor) VALUES (%s, %s)", cargos_padrao)
 
     # Tabela de Dados Institucionais do Clube
     cursor.execute('''CREATE TABLE IF NOT EXISTS clube_info (
@@ -179,9 +178,11 @@ if not st.session_state.logado:
                         conn_log = conectar_banco()
                         c_log = conn_log.cursor()
         
-                        # Ajusta para o Horário de Brasília (UTC-3)
-                        fuso_brasilia = datetime.now() - timedelta(hours=3)
-                        dh_login = fuso_brasilia.strftime("%d/%m/%Y %H:%M:%S")
+                        from datetime import timezone, timedelta
+
+                        # Fuso horário oficial de Brasília (UTC-3)
+                        fuso_brasilia = timezone(timedelta(hours=-3))
+                        dh_login = datetime.now(fuso_brasilia).strftime("%d/%m/%Y %H:%M:%S")
         
                         c_log.execute("INSERT INTO logs_acessos (usuario, perfil, data_acesso) VALUES (%s, %s, %s)", (usuario_input, res[1], dh_login))
                         conn_log.commit()
@@ -241,8 +242,8 @@ with st.sidebar:
 if menu == "⚙️ Painel Admin":
         st.title("⚙️ Painel do Administrador - Gestão do Clube")
         
-        tab_adm1, tab_adm2, tab_adm3, tab_adm4, tab_adm5, tab_adm6 = st.tabs([
-            "🛡️ Dados do Clube", "👥 Acessos", "🤝 Patrocinadores", "🎁 Doadores", "🏟️ Campos Conveniados", "💾 Backup & Dados"
+        tab_adm1, tab_adm2, tab_adm3, tab_adm4, tab_adm5, tab_adm6, tab_adm7 = st.tabs([
+            "🛡️ Dados do Clube", "👥 Acessos", "🤝 Patrocinadores", "🎁 Doadores", "🏟️ Campos Conveniados", "💵 Mensalidades por Cargo", "💾 Backup & Dados"
         ])
         
         with tab_adm1:
@@ -585,6 +586,28 @@ if menu == "⚙️ Painel Admin":
             st.dataframe(pd.read_sql(query_c, conn), use_container_width=True, hide_index=True)
 
         with tab_adm6:
+            st.subheader("💵 Configurar Valor de Mensalidade por Cargo")
+            st.write("Defina ou atualize o valor da mensalidade padrão para cada cargo do clube. Alterações aqui refletem automaticamente no cálculo dos inadimplentes.")
+            
+            df_cargos_val = pd.read_sql("SELECT id, cargo, valor FROM cargos_valores ORDER BY cargo ASC", conn)
+            
+            with st.form("form_atualizar_valores_cargo"):
+                novos_valores = {}
+                for _, row in df_cargos_val.iterrows():
+                    c_nome = row['cargo']
+                    c_val = float(row['valor'])
+                    novos_valores[c_nome] = st.number_input(f"Mensalidade para [{c_nome}] (R$)", value=c_val, format="%.2f", key=f"val_cargo_{row['id']}")
+                
+                if st.form_submit_button("💾 Salvar Alterações de Valores", use_container_width=True):
+                    c = conn.cursor()
+                    for cargo_k, val_v in novos_valores.items():
+                        c.execute("UPDATE cargos_valores SET valor = %s WHERE cargo = %s", (val_v, cargo_k))
+                    conn.commit()
+                    c.close()
+                    st.success("Valores de mensalidade atualizados com sucesso!")
+                    st.rerun()
+
+        with tab_adm7:
             st.subheader("💾 Central de Backup e Segurança de Dados")
             st.write("Baixe uma cópia de segurança em formato CSV de todas as tabelas do sistema para o seu computador a qualquer momento.")
             
@@ -597,7 +620,8 @@ if menu == "⚙️ Painel Admin":
                     data=df_b_atletas.to_csv(index=False).encode('utf-8'),
                     file_name="backup_membros_uniao_itapura.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="dl_backup_membros_csv"
                 )
                 
                 df_b_fin = pd.read_sql("SELECT * FROM financeiro", conn)
@@ -606,7 +630,8 @@ if menu == "⚙️ Painel Admin":
                     data=df_b_fin.to_csv(index=False).encode('utf-8'),
                     file_name="backup_financeiro_uniao_itapura.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="dl_backup_financeiro_csv"
                 )
 
             with col_b2:
@@ -616,7 +641,8 @@ if menu == "⚙️ Painel Admin":
                     data=df_b_jogos.to_csv(index=False).encode('utf-8'),
                     file_name="backup_jogos_uniao_itapura.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="dl_backup_jogos_csv"
                 )
                 
                 df_b_scouts = pd.read_sql("SELECT * FROM scouts", conn)
@@ -625,10 +651,18 @@ if menu == "⚙️ Painel Admin":
                     data=df_b_scouts.to_csv(index=False).encode('utf-8'),
                     file_name="backup_scouts_uniao_itapura.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="dl_backup_scouts_csv"
                 )
 
-            # <--- COLE AQUI EMBAIXO:
+            st.divider()
+            st.subheader("📊 Contagem de Acessos por Usuário")
+            df_contagem = pd.read_sql("SELECT TRIM(UPPER(usuario)) as usuario, perfil, COUNT(*) as total_acessos FROM logs_acessos GROUP BY TRIM(UPPER(usuario)), perfil ORDER BY total_acessos DESC", conn)
+            if not df_contagem.empty:
+                st.dataframe(df_contagem, use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhum acesso registrado ainda.")
+            
             st.divider()
             st.subheader("🔒 Extrato de Auditoria de Acessos ao Sistema")
             st.write("Registro de quem entrou no sistema, perfil e data/hora exata:")
@@ -1025,8 +1059,14 @@ elif menu == "💰 Financeiro":
 
         with tab2:
             st.subheader("📅 Calendário de Mensalidades & Painel Financeiro")
-            mes_ref_cal = st.text_input("Digite o Mês e Ano de Referência para Visualizar (Ex: 08/2026):", value=datetime.now().strftime("%m/%Y"))
-            atletas_ativos = pd.read_sql("SELECT id, nome, telefone FROM atletas WHERE status='Ativo' ORDER BY nome ASC", conn)
+            mes_ref_cal = st.text_input("Digite o Mês e Ano de Referência para Visualizar (Ex: 08/2026):", value=datetime.now().strftime("%m/%Y"), key="input_mes_ref_calendario")
+            
+            # Puxa a tabela de valores por cargo do banco
+            df_valores_cargos = pd.read_sql("SELECT cargo, valor FROM cargos_valores", conn)
+            dict_valores_cargo = {row['cargo']: row['valor'] for _, row in df_valores_cargos.iterrows()}
+            
+            # Puxa atletas ativos incluindo cargo e posicao
+            atletas_ativos = pd.read_sql("SELECT id, nome, cargo, posicao, telefone FROM atletas WHERE status='Ativo' ORDER BY nome ASC", conn)
             
             if not atletas_ativos.empty:
                 c = conn.cursor()
@@ -1037,12 +1077,31 @@ elif menu == "💰 Financeiro":
                 dados_calendario = []
                 total_arrecadado = 0.0
                 total_pendente = 0.0
-                valor_padrao_mensalidade = 50.00
                 
                 for _, atleta in atletas_ativos.iterrows():
                     aid = atleta['id']
                     nome_atleta = atleta['nome']
-                    if aid in pagamentos_efetuados:
+                    cargo_atleta = atleta['cargo'] if atleta['cargo'] in dict_valores_cargo else "Jogador"
+                    posicao_atleta = str(atleta['posicao'] or "").strip()
+                    
+                    # Regra de Isenção: Goleiro (seja por cargo ou por posição em campo) não paga mensalidade
+                    eh_goleiro = (cargo_atleta.lower() == "goleiro" or posicao_atleta.lower() == "goleiro")
+                    
+                    if eh_goleiro:
+                        valor_devido_atleta = 0.0
+                    else:
+                        valor_devido_atleta = dict_valores_cargo.get(cargo_atleta, 40.0)
+                    
+                    # Define o status financeiro
+                    if eh_goleiro:
+                        status = "🛡️ Isento (Goleiro)"
+                        val_pago = 0.0
+                        val_falta = 0.0
+                    elif valor_devido_atleta == 0.0:
+                        status = "🛡️ Isento"
+                        val_pago = 0.0
+                        val_falta = 0.0
+                    elif aid in pagamentos_efetuados:
                         status = "✅ Pago"
                         val_pago = pagamentos_efetuados[aid]
                         total_arrecadado += val_pago
@@ -1050,14 +1109,14 @@ elif menu == "💰 Financeiro":
                     else:
                         status = "❌ Inadimplente"
                         val_pago = 0.0
-                        total_pendente += valor_padrao_mensalidade
-                        val_falta = valor_padrao_mensalidade
+                        total_pendente += valor_devido_atleta
+                        val_falta = valor_devido_atleta
                     
                     dados_calendario.append({
-                        "Atleta": nome_atleta,
+                        "Atleta": f"{nome_atleta} ({cargo_atleta} - {posicao_atleta})",
                         "Status": status,
                         "Valor Pago (R$)": f"R$ {val_pago:.2f}" if val_pago > 0 else "R$ 0.00",
-                        "Falta Pagar (R$)": f"R$ {val_falta:.2f}" if val_falta > 0 else "Quitado"
+                        "Falta Pagar (R$)": f"R$ {val_falta:.2f}" if val_falta > 0 else ("Isento" if valor_devido_atleta == 0.0 else "Quitado")
                     })
                 
                 df_cal = pd.DataFrame(dados_calendario)
@@ -1071,20 +1130,18 @@ elif menu == "💰 Financeiro":
                 st.subheader(f"📋 Calendário de Mensalidades - Referência: {mes_ref_cal}")
                 st.dataframe(df_cal, use_container_width=True, hide_index=True)
                 
-                if st.button("📥 Gerar Relatório em PDF do Calendário de Mensalidades", use_container_width=True):
+                if st.button("📥 Gerar Relatório em PDF do Calendário de Mensalidades", use_container_width=True, key="btn_pdf_cal_mensalidades"):
                     data_hora_impressao = datetime.now().strftime("%d/%m/%Y - %H:%Mh")
                     usuario_impressor = st.session_state.usuario
                     
                     pdf = PDFRelatorio(f"CALENDARIO DE MENSALIDADES - {mes_ref_cal}")
                     pdf.add_page(orientation='P') # Retrato
                     
-                    # Cabeçalho de controle de impressão
                     pdf.set_font("Helvetica", "B", 8)
                     pdf.set_text_color(50, 50, 50)
                     pdf.cell(0, 5, f"IMPRESSÃO: {data_hora_impressao} - {usuario_impressor}", 0, 1, "R")
                     pdf.ln(2)
                     
-                    # Resumo Financeiro Cards / Métricas no PDF
                     pdf.set_font("Helvetica", "B", 9)
                     pdf.set_fill_color(245, 245, 245)
                     pdf.set_text_color(0, 0, 128)
@@ -1097,25 +1154,23 @@ elif menu == "💰 Financeiro":
                     pdf.cell(190, 6, f"   Total de Atletas Ativos: {len(atletas_ativos)}", "LBR", 1, "L")
                     pdf.ln(5)
                     
-                    # Cabeçalho da Tabela Padronizada
                     pdf.set_font("Helvetica", "B", 8)
                     pdf.set_fill_color(220, 220, 220)
                     pdf.set_text_color(0, 0, 0)
-                    pdf.cell(90, 6, "ATLETA", 1, 0, "L", True)
+                    pdf.cell(90, 6, "ATLETA (CARGO)", 1, 0, "L", True)
                     pdf.cell(35, 6, "STATUS", 1, 0, "C", True)
                     pdf.cell(35, 6, "VALOR PAGO", 1, 0, "R", True)
                     pdf.cell(30, 6, "PENDENTE", 1, 1, "R", True)
                     
-                    # Linhas da Tabela por Atleta
                     pdf.set_font("Helvetica", "", 8)
                     for item in dados_calendario:
-                        status_texto = "PAGO" if "Pago" in item['Status'] else "INADIMPLENTE"
+                        status_texto = "PAGO" if "Pago" in item['Status'] else ("ISENTO" if "Isento" in item['Status'] else "INADIMPLENTE")
                         
                         if pdf.get_y() > 265:
                             pdf.add_page(orientation='P')
                             pdf.set_font("Helvetica", "B", 8)
                             pdf.set_fill_color(220, 220, 220)
-                            pdf.cell(90, 6, "ATLETA", 1, 0, "L", True)
+                            pdf.cell(90, 6, "ATLETA (CARGO)", 1, 0, "L", True)
                             pdf.cell(35, 6, "STATUS", 1, 0, "C", True)
                             pdf.cell(35, 6, "VALOR PAGO", 1, 0, "R", True)
                             pdf.cell(30, 6, "PENDENTE", 1, 1, "R", True)
@@ -1133,7 +1188,8 @@ elif menu == "💰 Financeiro":
                         data=pdf_bytes,
                         file_name="Calendario_Mensalidades.pdf",
                         mime="application/pdf",
-                        use_container_width=True
+                        use_container_width=True,
+                        key="dl_pdf_calendario_mensalidades"
                     )
 
     # ==========================================
